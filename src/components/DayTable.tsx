@@ -19,7 +19,7 @@ const COLUMNS = [
   { key: "timeout", label: "Out" },
   { key: "workedMinutes", label: "Worked" },
   { key: "shiftDurationMinutes", label: "Shift" },
-  { key: "extraDeficitMinutes", label: "Extra/Deficit" },
+  { key: "extraDeficitMinutes", label: "+/− Shift" },
   { key: "isLateArrival", label: "Late" },
 ];
 
@@ -43,10 +43,10 @@ function getSortValue(record: EnrichedRecord, column: string): string | number {
 }
 
 function renderExtraDeficit(record: EnrichedRecord): React.ReactNode {
-  if (!record.isWorkedDay) return <span className="text-faint">—</span>;
+  if (!record.isWorkedDay) return <span className="text-stone">—</span>;
   const value = record.extraDeficitMinutes;
-  if (value === 0) return <span className="text-mute">0h 0m</span>;
-  if (value > 0) return <span className="text-[#0070f3] font-medium">+{formatMinutes(value)}</span>;
+  if (value === 0) return <span className="text-steel">0h 0m</span>;
+  if (value > 0) return <span className="text-primary font-medium">+{formatMinutes(value)}</span>;
   return <span className="text-error font-medium">-{formatMinutes(Math.abs(value))}</span>;
 }
 
@@ -72,25 +72,55 @@ export default function DayTable({ records }: DayTableProps) {
     return sortState.direction === "asc" ? comparison : -comparison;
   });
 
-  function getSortIndicator(columnKey: string): string {
-    if (sortState.column !== columnKey) return "";
-    return sortState.direction === "asc" ? " ↑" : " ↓";
+  function getAriaSort(columnKey: string): "ascending" | "descending" | "none" {
+    if (sortState.column !== columnKey) return "none";
+    return sortState.direction === "asc" ? "ascending" : "descending";
   }
 
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-left">
         <thead>
-          <tr className="border-b border-hairline">
-            {COLUMNS.map((col) => (
-              <th
-                key={col.key}
-                className="px-4 py-3 text-[11px] font-medium text-mute uppercase tracking-wide cursor-pointer select-none hover:text-ink transition-colors whitespace-nowrap"
-                onClick={() => handleColumnClick(col.key)}
-              >
-                {col.label}{getSortIndicator(col.key)}
-              </th>
-            ))}
+          <tr className="border-b border-hairline bg-surface">
+            {COLUMNS.map((col) => {
+              const isActive = sortState.column === col.key;
+              const isAsc = isActive && sortState.direction === "asc";
+              const isDesc = isActive && sortState.direction === "desc";
+              return (
+                <th
+                  key={col.key}
+                  className="px-4 py-3 text-[11px] font-semibold text-steel uppercase tracking-wide cursor-pointer select-none hover:text-ink transition-colors whitespace-nowrap group"
+                  onClick={() => handleColumnClick(col.key)}
+                  aria-sort={getAriaSort(col.key)}
+                  title={`Sort by ${col.label}`}
+                >
+                  <span className="inline-flex items-center gap-1">
+                    {col.label}
+                    <svg
+                      className={`w-3 h-3 shrink-0 transition-colors ${isActive ? "text-primary" : "text-stone opacity-0 group-hover:opacity-100"}`}
+                      viewBox="0 0 10 14"
+                      fill="none"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M5 1L9 5H1L5 1Z"
+                        fill={isAsc ? "currentColor" : "none"}
+                        stroke="currentColor"
+                        strokeWidth="1.2"
+                        className={isAsc ? "" : isActive ? "opacity-40" : ""}
+                      />
+                      <path
+                        d="M5 13L1 9H9L5 13Z"
+                        fill={isDesc ? "currentColor" : "none"}
+                        stroke="currentColor"
+                        strokeWidth="1.2"
+                        className={isDesc ? "" : isActive ? "opacity-40" : ""}
+                      />
+                    </svg>
+                  </span>
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody>
@@ -99,21 +129,21 @@ export default function DayTable({ records }: DayTableProps) {
               key={`${record.attendanceDate}-${idx}`}
               className={`border-b border-hairline transition-colors ${
                 record.isLateArrival
-                  ? "bg-[#fff8e1]"
+                  ? "bg-[#fef9ec] dark:bg-[#2a2000]"
                   : record.extraDeficitMinutes < 0 && record.isWorkedDay
-                  ? "bg-[#fff5f5]"
+                  ? "bg-[#fef2f2] dark:bg-[#2a0000]"
                   : "hover:bg-hairline-soft"
               }`}
             >
-              <td className="px-4 py-2.5 text-sm text-ink font-medium whitespace-nowrap">{record.attendanceDate}</td>
-              <td className="px-4 py-2.5 text-sm text-body whitespace-nowrap">{getDayOfWeek(record.attendanceDate)}</td>
-              <td className="px-4 py-2.5 text-sm text-body whitespace-nowrap">{record.status}</td>
-              <td className="px-4 py-2.5 text-sm text-body whitespace-nowrap font-mono">{record.timeIn ?? <span className="text-faint">—</span>}</td>
-              <td className="px-4 py-2.5 text-sm text-body whitespace-nowrap font-mono">{record.timeout ?? <span className="text-faint">—</span>}</td>
-              <td className="px-4 py-2.5 text-sm text-ink whitespace-nowrap font-mono">{formatMinutes(record.workedMinutes)}</td>
-              <td className="px-4 py-2.5 text-sm text-mute whitespace-nowrap font-mono">{formatMinutes(record.shiftDurationMinutes)}</td>
-              <td className="px-4 py-2.5 text-sm whitespace-nowrap font-mono">{renderExtraDeficit(record)}</td>
-              <td className="px-4 py-2.5 text-sm whitespace-nowrap">
+              <td className="px-4 py-3 text-sm text-ink font-medium whitespace-nowrap">{record.attendanceDate}</td>
+              <td className="px-4 py-3 text-sm text-charcoal whitespace-nowrap">{getDayOfWeek(record.attendanceDate)}</td>
+              <td className="px-4 py-3 text-sm text-charcoal whitespace-nowrap">{record.status}</td>
+              <td className="px-4 py-3 text-sm text-charcoal whitespace-nowrap font-mono">{record.timeIn ?? <span className="text-stone">—</span>}</td>
+              <td className="px-4 py-3 text-sm text-charcoal whitespace-nowrap font-mono">{record.timeout ?? <span className="text-stone">—</span>}</td>
+              <td className="px-4 py-3 text-sm text-ink whitespace-nowrap font-mono">{formatMinutes(record.workedMinutes)}</td>
+              <td className="px-4 py-3 text-sm text-steel whitespace-nowrap font-mono">{formatMinutes(record.shiftDurationMinutes)}</td>
+              <td className="px-4 py-3 text-sm whitespace-nowrap font-mono">{renderExtraDeficit(record)}</td>
+              <td className="px-4 py-3 text-sm whitespace-nowrap">
                 {record.isLateArrival ? <span className="text-warning font-medium">Late</span> : ""}
               </td>
             </tr>

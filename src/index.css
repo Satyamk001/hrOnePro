@@ -3,35 +3,99 @@
 @tailwind utilities;
 
 :root {
-  --color-canvas: #fafafa;
-  --color-elevated: #ffffff;
-  --color-ink: #171717;
-  --color-body: #4d4d4d;
-  --color-mute: #8f8f8f;
-  --color-faint: #a1a1a1;
-  --color-hairline: #ebebeb;
-  --color-hairline-soft: #f2f2f2;
+  /* Brand & Accent */
+  --color-primary: #f97316;
+  --color-primary-deep: #ea580c;
+  --color-sunshine-300: #fcd34d;
+  --color-sunshine-500: #f59e0b;
+  --color-sunshine-700: #d97706;
+  --color-sunshine-800: #b45309;
+  --color-sunshine-900: #92400e;
+  --color-yellow-saturated: #fbbf24;
+
+  /* Cream / Neutral Warm */
+  --color-cream: #fef9ec;
+  --color-cream-soft: #fffdf7;
+  --color-cream-deeper: #fde68a;
+  --color-beige-deep: #e5d5b0;
+
+  /* Surface */
+  --color-canvas: #ffffff;
+  --color-surface: #fafaf9;
+  --color-surface-cream: #fefcf3;
+  --color-surface-code: #1e1e2e;
+  --color-hairline: #e7e5e4;
+  --color-hairline-soft: #f5f5f4;
+  --color-hairline-strong: #d6d3d1;
+
+  /* Text */
+  --color-ink: #1c1917;
+  --color-ink-tint: #292524;
+  --color-charcoal: #44403c;
+  --color-slate: #57534e;
+  --color-steel: #78716c;
+  --color-stone: #a8a29e;
+  --color-muted: #d6d3d1;
+  --color-on-dark: #fafaf9;
+  --color-on-dark-muted: rgba(250, 250, 249, 0.6);
+
+  /* Semantic */
+  --color-link: #f97316;
+  --color-error: #dc2626;
+  --color-warning: #d97706;
+  --color-success: #16a34a;
 }
 
 .dark {
-  --color-canvas: #0a0a0a;
-  --color-elevated: #171717;
-  --color-ink: #ededed;
-  --color-body: #a1a1a1;
-  --color-mute: #6b6b6b;
-  --color-faint: #4d4d4d;
-  --color-hairline: #2e2e2e;
-  --color-hairline-soft: #1a1a1a;
+  /* Brand stays consistent */
+  --color-primary: #fb923c;
+  --color-primary-deep: #f97316;
+  --color-sunshine-300: #fcd34d;
+  --color-sunshine-500: #f59e0b;
+  --color-sunshine-700: #d97706;
+
+  /* Cream adapts to warm dark */
+  --color-cream: #292218;
+  --color-cream-soft: #1f1a14;
+  --color-cream-deeper: #44380e;
+  --color-beige-deep: #4a3f2a;
+
+  /* Surface — warm dark */
+  --color-canvas: #0f0e0c;
+  --color-surface: #171614;
+  --color-surface-cream: #1a1812;
+  --color-surface-code: #0f0e0c;
+  --color-hairline: #2e2a26;
+  --color-hairline-soft: #1f1c18;
+  --color-hairline-strong: #3d3730;
+
+  /* Text — warm whites */
+  --color-ink: #fafaf9;
+  --color-ink-tint: #e7e5e4;
+  --color-charcoal: #d6d3d1;
+  --color-slate: #a8a29e;
+  --color-steel: #78716c;
+  --color-stone: #57534e;
+  --color-muted: #44403c;
+  --color-on-dark: #fafaf9;
+  --color-on-dark-muted: rgba(250, 250, 249, 0.5);
+
+  /* Semantic */
+  --color-link: #fb923c;
+  --color-error: #f87171;
+  --color-warning: #fbbf24;
+  --color-success: #4ade80;
 }
 
 body {
   background-color: var(--color-canvas);
   color: var(--color-ink);
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Custom scrollbar — matches theme */
+/* Custom scrollbar */
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--color-hairline) transparent;
@@ -52,5 +116,10 @@ body {
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background-color: var(--color-mute);
+  background-color: var(--color-steel);
+}
+
+/* Sunset stripe gradient */
+.sunset-stripe {
+  background: linear-gradient(90deg, var(--color-primary) 0%, var(--color-sunshine-700) 25%, var(--color-sunshine-500) 50%, var(--color-yellow-saturated) 75%, var(--color-cream) 100%);
 }
