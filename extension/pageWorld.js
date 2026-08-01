@@ -1,0 +1,109 @@
+/**
+ * pageWorld.js — Injected into the page's JS context.
+ * Intercepts HROne attendance API responses via BOTH fetch and XMLHttpRequest.
+ * Handles New Relic and other agents that also monkey-patch fetch.
+ *
+ * Target: /api/timeoffice/attendance/Calendar
+ */
+(function () {
+  const TARGET_URL = "attendance/Calendar";
+
+  function dispatchRecords(records, sourceUrl) {
+    console.log(
+      "[Attendance Interceptor] ✓ Dispatching",
+      records.length,
+      "records to content.js"
+    );
+    window.dispatchEvent(
+      new CustomEvent("InterceptedAttendanceData", {
+        detail: { records, sourceUrl },
+      })
+    );
+  }
+
+  function tryExtractRecords(text, url) {
+    try {
+      const data = JSON.parse(text);
+      let records = null;
+
+      if (Array.isArray(data)) {
+        records = data;
+      } else if (data && typeof data === "object") {
+        records = data.data || data.result || data.records || data.attendanceList;
+        if (!Array.isArray(records)) records = null;
+      }
+
+      if (records && records.length > 0 && records[0].attendanceDate) {
+        dispatchRecords(records, url);
+        return true;
+      }
+    } catch (e) {
+      // not JSON
+    }
+    return false;
+  }
+
+  // === METHOD 1: Patch fetch ===
+  function patchFetch() {
+    const currentFetch = window.fetch;
+    window.fetch = async function (...args) {
+      const response = await currentFetch.apply(this, args);
+      try {
+        let url = "";
+        if (typeof args[0] === "string") url = args[0];
+        else if (args[0] && args[0].url) url = args[0].url;
+
+        if (response.ok && url.includes(TARGET_URL)) {
+          console.log("[Attendance Interceptor] fetch intercepted:", url);
+          const clone = response.clone();
+          const text = await clone.text();
+          tryExtractRecords(text, url);
+        }
+      } catch (err) {
+        console.warn("[Attendance Interceptor] fetch patch error:", err);
+      }
+      return response;
+    };
+  }
+
+  // === METHOD 2: Patch XMLHttpRequest ===
+  function patchXHR() {
+    const originalOpen = XMLHttpRequest.prototype.open;
+    const originalSend = XMLHttpRequest.prototype.send;
+
+    XMLHttpRequest.prototype.open = function (method, url, ...rest) {
+      this._interceptUrl = url;
+      return originalOpen.apply(this, [method, url, ...rest]);
+    };
+
+    XMLHttpRequest.prototype.send = function (...args) {
+      this.addEventListener("load", function () {
+        try {
+          if (
+            this._interceptUrl &&
+            this._interceptUrl.includes(TARGET_URL) &&
+            this.status >= 200 &&
+            this.status < 300
+          ) {
+            console.log("[Attendance Interceptor] XHR intercepted:", this._interceptUrl);
+            tryExtractRecords(this.responseText, this._interceptUrl);
+          }
+        } catch (err) {
+          console.warn("[Attendance Interceptor] XHR intercept error:", err);
+        }
+      });
+      return originalSend.apply(this, args);
+    };
+  }
+
+  // Apply both patches
+  patchFetch();
+  patchXHR();
+
+  // Re-patch fetch after a delay in case New Relic overwrites it
+  setTimeout(patchFetch, 100);
+  setTimeout(patchFetch, 500);
+  setTimeout(patchFetch, 2000);
+
+  console.log("[Attendance Interceptor] ✓ pageWorld.js loaded — fetch + XHR patched");
+})();

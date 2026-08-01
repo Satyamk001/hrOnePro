@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "Attendance Interceptor",
+  "version": "1.1.0",
+  "description": "Auto-syncs HROne attendance data to the Attendance Insights dashboard",
+  "permissions": [
+    "storage",
+    "tabs",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://app.hrone.cloud/*",
+    "http://localhost/*",
+    "http://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://app.hrone.cloud/*"],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["http://localhost/*", "http://10.10.22.12/*"],
+      "js": ["receiver.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["pageWorld.js"],
+      "matches": ["https://app.hrone.cloud/*"]
+    }
+  ]
+}
