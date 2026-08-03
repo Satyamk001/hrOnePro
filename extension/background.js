@@ -111,6 +111,29 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ success: true });
     return true;
   }
+
+  if (message.type === "TODAY_PUNCHES_INTERCEPTED") {
+    const { punches } = message.payload;
+
+    console.log("[Attendance Interceptor] Background: received", punches.length, "today punches");
+
+    chrome.storage.local.set({ lastTodayPunches: punches, lastTodayPunchesAt: new Date().toISOString() });
+
+    // Forward to app tabs
+    chrome.tabs.query({}, (allTabs) => {
+      const appTabs = allTabs.filter(isAppTab);
+      for (const tab of appTabs) {
+        chrome.tabs.sendMessage(
+          tab.id,
+          { type: "TODAY_PUNCHES_RECEIVED", payload: { punches } },
+          () => { if (chrome.runtime.lastError) { /* ignore */ } }
+        );
+      }
+    });
+
+    sendResponse({ success: true });
+    return true;
+  }
 });
 
 // When any http tab completes loading and looks like our app, send pending data
@@ -145,3 +168,166 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     });
   }
 });
+
+
+// Handle "Sync Now" request from the app via receiver.js
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === "FETCH_ATTENDANCE_REQUEST") {
+    const { employeeId, month, year } = message.payload;
+    const eid = employeeId || 0;
+    const m = month || new Date().getMonth() + 1;
+    const y = year || new Date().getFullYear();
+
+    console.log("[Attendance Interceptor] Background: Sync Now requested for", eid, m, y);
+
+    if (!eid) {
+      notifyAppTabs({ success: false, error: "No employee ID configured" });
+      sendResponse({ success: false, error: "No employee ID" });
+      return true;
+    }
+
+    // Find an existing HROne tab or create one
+    chrome.tabs.query({ url: "https://app.hrone.cloud/*" }, (hroneTabs) => {
+      if (hroneTabs.length > 0) {
+        // Use existing tab — inject fetch script
+        const tabId = hroneTabs[0].id;
+        console.log("[Attendance Interceptor] Background: Using existing HROne tab", tabId);
+        injectFetchScript(tabId, eid, m, y);
+      } else {
+        // Open HROne in background — user must be logged in
+        console.log("[Attendance Interceptor] Background: Opening HROne tab...");
+        chrome.tabs.create(
+          { url: "https://app.hrone.cloud/app/myprofile/calendar", active: false },
+          (tab) => {
+            // Wait for the tab to finish loading
+            chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo) {
+              if (tabId === tab.id && changeInfo.status === "complete") {
+                chrome.tabs.onUpdated.removeListener(listener);
+                // Small delay to let HROne JS initialize
+                setTimeout(() => {
+                  injectFetchScript(tab.id, eid, m, y);
+                }, 2000);
+              }
+            });
+          }
+        );
+      }
+    });
+
+    sendResponse({ success: true, message: "Sync initiated" });
+    return true;
+  }
+});
+
+function injectFetchScript(tabId, eid, month, year) {
+  chrome.scripting.executeScript({
+    target: { tabId },
+    func: fetchAttendanceFromHROne,
+    args: [eid, month, year],
+  }).catch((err) => {
+    console.error("[Attendance Interceptor] Background: inject failed:", err.message);
+    notifyAppTabs({ success: false, error: "Failed to connect to HROne: " + err.message });
+  });
+}
+
+// This function runs inside the HROne tab context
+function fetchAttendanceFromHROne(eid, month, year) {
+  const hdrs = {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json, text/plain, */*',
+    'domaincode': 'mapmyindia',
+    'accessmode': 'W',
+    'x-requested-with': location.origin,
+    'cache-control': 'no-cache',
+    'pragma': 'no-cache'
+  };
+
+  let empProfile = null;
+  let records = null;
+  let todayPunches = null;
+  let profileDone = false;
+  let attendanceDone = false;
+  let punchDone = false;
+
+  function trySend() {
+    if (!attendanceDone || !profileDone || !punchDone) return;
+    // Send results back to background via custom event → content.js
+    window.dispatchEvent(new CustomEvent("InterceptedAttendanceData", {
+      detail: { records: records || [], sourceUrl: "sync-now" }
+    }));
+    if (empProfile) {
+      window.dispatchEvent(new CustomEvent("InterceptedProfileData", {
+        detail: { profile: empProfile }
+      }));
+    }
+    if (todayPunches && todayPunches.length > 0) {
+      window.dispatchEvent(new CustomEvent("InterceptedTodayPunches", {
+        detail: { punches: todayPunches }
+      }));
+    }
+  }
+
+  // Fetch profile
+  fetch(location.origin + '/api/workforce/Employee/EmployeeInformation/' + eid, {
+    method: 'GET', headers: hdrs, credentials: 'include'
+  }).then(r => r.ok ? r.json() : null).then(data => {
+    if (data) {
+      const arr = Array.isArray(data) ? data : [data];
+      const info = arr[0];
+      if (info) {
+        empProfile = {
+          employeeId: eid,
+          employeeCode: info.employeeCode || '',
+          employeeName: info.employeeName || '',
+          designation: info.designation || '',
+          department: info.department || '',
+          email: info.officialEmail || info.personalEmail || '',
+          phone: info.mobileNo || '',
+          dateOfJoining: info.dateOfJoining || '',
+          reportingManager: info.reportingManager || '',
+          profileImageUrl: info.imageVirtualPath || info.thumbnailFileName || null
+        };
+      }
+    }
+  }).catch(() => {}).then(() => { profileDone = true; trySend(); });
+
+  // Fetch attendance
+  fetch(location.origin + '/api/timeoffice/attendance/Calendar', {
+    method: 'POST', headers: hdrs, credentials: 'include',
+    body: JSON.stringify({ attendanceYear: year, attendanceMonth: month, employeeId: eid, calendarViewType: 'C' })
+  }).then(r => {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.text();
+  }).then(text => {
+    const data = JSON.parse(text);
+    records = Array.isArray(data) ? data : (data.data || data.result || []);
+    if (!records.length) {
+      console.log('[Attendance Interceptor] Sync Now: no records found');
+    }
+    attendanceDone = true;
+    trySend();
+  }).catch(err => {
+    console.error('[Attendance Interceptor] Sync Now fetch error:', err.message);
+    attendanceDone = true;
+    trySend();
+  });
+
+  // Fetch today's raw punches
+  const today = new Date().toISOString().split('T')[0];
+  fetch(location.origin + '/api/timeoffice/attendance/RawPunch/' + eid + '/' + today + '/true', {
+    method: 'GET', headers: hdrs, credentials: 'include'
+  }).then(r => r.ok ? r.json() : null).then(data => {
+    if (data && Array.isArray(data) && data.length > 0) {
+      todayPunches = data;
+    }
+  }).catch(() => {}).then(() => { punchDone = true; trySend(); });
+}
+
+function notifyAppTabs(payload) {
+  chrome.tabs.query({}, (allTabs) => {
+    const appTabs = allTabs.filter(isAppTab);
+    for (const tab of appTabs) {
+      chrome.tabs.sendMessage(tab.id, { type: "SYNC_STATUS", payload });
+    }
+  });
+}

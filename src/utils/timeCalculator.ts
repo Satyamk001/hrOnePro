@@ -26,11 +26,26 @@ export function formatMinutes(m: number): string {
 
 /**
  * Compute per-record time metrics from a ClassifiedRecord.
+ * Falls back to timeIn/timeout calculation only if calculatedWorkingHours is
+ * genuinely missing (no colon, e.g., "0" or empty), NOT if it's "00:00".
  */
 export function computeRecordMetrics(record: ClassifiedRecord): EnrichedRecord {
   const shiftDurationMinutes =
     parseHHMM(record.shiftEndTime) - parseHHMM(record.shiftStartTime);
-  const workedMinutes = parseHHMM(record.calculatedWorkingHours);
+
+  let workedMinutes = parseHHMM(record.calculatedWorkingHours);
+
+  // Fallback: only when calculatedWorkingHours has no colon (e.g., "0", "", null)
+  // meaning HROne didn't provide a valid HH:MM value at all
+  const hasValidCalcHours = record.calculatedWorkingHours && record.calculatedWorkingHours.includes(":");
+  if (!hasValidCalcHours && record.timeIn && record.timeout) {
+    const inMinutes = parseHHMM(record.timeIn);
+    const outMinutes = parseHHMM(record.timeout);
+    if (inMinutes > 0 && outMinutes > 0 && outMinutes > inMinutes) {
+      workedMinutes = outMinutes - inMinutes;
+    }
+  }
+
   const extraDeficitMinutes = workedMinutes - shiftDurationMinutes;
   const isWorkedDay =
     record.status === "Present" || record.status === "Half Day";

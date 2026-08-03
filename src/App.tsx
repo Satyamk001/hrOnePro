@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
-import type { AttendanceRecord, DashboardMetrics, EnrichedRecord, EmployeeProfile } from "./types";
+import type { AttendanceRecord, DashboardMetrics, EnrichedRecord, EmployeeProfile, TodayAttendance, RawPunch } from "./types";
 import { classifyRecord } from "./utils/classifier";
 import {
   computeRecordMetrics,
@@ -17,7 +17,10 @@ const USER_KEY = "attendance-insights-user";
 const PROFILE_KEY = "attendance-insights-profile";
 const BOOKMARKLET_VERSION = "3";
 const BOOKMARKLET_VERSION_KEY = "attendance-bookmarklet-version";
-
+const EXTENSION_VERSION = "2.0.0";
+const EXTENSION_VERSION_KEY = "attendance-extension-version";
+const APP_VERSION_KEY = "attendance-app-version";
+const APP_VERSION = "1.3.0"; // Bump this on each release
 interface SavedEntry { label: string; key: string; records: AttendanceRecord[]; }
 
 function deriveMonthKey(records: AttendanceRecord[]): string {
@@ -156,9 +159,30 @@ function App() {
   const [toast, setToast] = useState<string | null>(null);
   const [lastSynced, setLastSynced] = useState<string | null>(() => localStorage.getItem("attendance-last-synced"));
   const [bookmarkletOutdated, setBookmarkletOutdated] = useState(false);
+  const [extensionAvailable, setExtensionAvailable] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [todayAttendance, setTodayAttendance] = useState<TodayAttendance | null>(null);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [hasUpdate, setHasUpdate] = useState(false);
   const [employeeProfile, setEmployeeProfile] = useState<EmployeeProfile | null>(() => {
     try { const raw = localStorage.getItem(PROFILE_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; }
   });
+
+  // Version check — detect new app/extension versions and prompt update
+  useEffect(() => {
+    const storedAppVersion = localStorage.getItem(APP_VERSION_KEY);
+    const storedExtVersion = localStorage.getItem(EXTENSION_VERSION_KEY);
+    if (storedAppVersion && storedAppVersion !== APP_VERSION) {
+      setHasUpdate(true);
+      setShowOnboarding(true);
+    }
+    if (storedExtVersion && storedExtVersion !== EXTENSION_VERSION) {
+      setHasUpdate(true);
+    }
+    // Save current versions
+    localStorage.setItem(APP_VERSION_KEY, APP_VERSION);
+    localStorage.setItem(EXTENSION_VERSION_KEY, EXTENSION_VERSION);
+  }, []);
 
   const appUrl = window.location.origin;
   const bookmarkletCode = generateBookmarkletCode(appUrl, BOOKMARKLET_VERSION);
@@ -177,6 +201,11 @@ function App() {
     if (!Array.isArray(data) || data.length === 0) return;
     if (!data[0].attendanceDate) return;
 
+    // Save employee ID for future Sync Now use
+    if (data[0].employeeId) {
+      localStorage.setItem("attendance-empId", String(data[0].employeeId));
+    }
+
     const normalized = normalizeRecords(data);
     const monthKey = deriveMonthKey(normalized);
     const label = formatMonthLabel(monthKey);
@@ -193,6 +222,7 @@ function App() {
 
     setToast(`Synced ${label} — ${normalized.length} days`);
     setTimeout(() => setToast(null), 3000);
+    setSyncing(false);
   }, []);
 
   useEffect(() => {
@@ -217,6 +247,111 @@ function App() {
     window.addEventListener("ProfileDataFromExtension", h);
     return () => window.removeEventListener("ProfileDataFromExtension", h);
   }, []);
+
+  // Listen for today's punch data from extension
+  useEffect(() => {
+    const h = (event: Event) => {
+      const e = event as CustomEvent<{ punches: RawPunch[] }>;
+      if (e.detail?.punches && e.detail.punches.length > 0) {
+        const punches = e.detail.punches
+          .filter(p => !p.isPunchExcluded)
+          .sort((a, b) => a.punchDateTime.localeCompare(b.punchDateTime));
+        if (punches.length > 0) {
+          const firstPunch = punches[0].punchDateTime;
+          const lastPunch = punches[punches.length - 1].punchDateTime;
+          const firstTime = new Date(firstPunch);
+          const lastTime = new Date(lastPunch);
+          const now = new Date();
+          // If only one punch, calculate from first to now
+          const isStillIn = punches.length % 2 !== 0; // odd punches = still in
+          const endTime = isStillIn ? now : lastTime;
+          const workedMs = endTime.getTime() - firstTime.getTime();
+          const workedMinutesSoFar = Math.max(0, Math.floor(workedMs / 60000));
+
+          setTodayAttendance({
+            date: firstPunch.split("T")[0],
+            firstPunch: firstTime.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }),
+            lastPunch: lastTime.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }),
+            punchCount: punches.length,
+            workedMinutesSoFar,
+            isStillIn,
+          });
+        }
+      }
+    };
+    window.addEventListener("TodayPunchesFromExtension", h);
+    return () => window.removeEventListener("TodayPunchesFromExtension", h);
+  }, []);
+
+  // Detect extension availability
+  useEffect(() => {
+    const onReady = () => {
+      setExtensionAvailable(true);
+      // Auto-sync on page load if employee ID exists
+      let empId = parseInt(localStorage.getItem("attendance-empId") || "0");
+      if (!empId && savedEntries.length > 0) {
+        const firstRecord = savedEntries[0].records[0];
+        if (firstRecord) {
+          empId = firstRecord.employeeId;
+          localStorage.setItem("attendance-empId", String(empId));
+        }
+      }
+      if (empId) {
+        const now = new Date();
+        window.dispatchEvent(new CustomEvent("RequestAttendanceSync", {
+          detail: { employeeId: empId, month: now.getMonth() + 1, year: now.getFullYear() }
+        }));
+      }
+    };
+    window.addEventListener("AttendanceExtensionReady", onReady);
+    // Check if already set (extension loaded before React)
+    if ((window as unknown as { __attendanceExtensionReady?: boolean }).__attendanceExtensionReady) {
+      onReady();
+    }
+    return () => window.removeEventListener("AttendanceExtensionReady", onReady);
+  }, []);
+
+  // Listen for sync status from extension
+  useEffect(() => {
+    const h = (event: Event) => {
+      const e = event as CustomEvent<{ success: boolean; error?: string }>;
+      if (e.detail && !e.detail.success && e.detail.error) {
+        setToast(`Sync failed: ${e.detail.error}`);
+        setTimeout(() => setToast(null), 4000);
+      }
+      setSyncing(false);
+    };
+    window.addEventListener("ExtensionSyncStatus", h);
+    return () => window.removeEventListener("ExtensionSyncStatus", h);
+  }, []);
+
+  // Sync Now handler
+  const handleSyncNow = useCallback(() => {
+    // Try to get employee ID from: localStorage, stored profile, or existing records
+    let empId = parseInt(localStorage.getItem("attendance-empId") || "0");
+    if (!empId && employeeProfile) empId = employeeProfile.employeeId;
+    if (!empId && savedEntries.length > 0) {
+      const firstRecord = savedEntries[0].records[0];
+      if (firstRecord) empId = firstRecord.employeeId;
+    }
+    if (!empId) {
+      const input = prompt("Enter your Employee ID (find it in your HROne profile):");
+      empId = parseInt(input || "0");
+      if (!empId) {
+        setToast("Employee ID is required for syncing.");
+        setTimeout(() => setToast(null), 4000);
+        return;
+      }
+    }
+    localStorage.setItem("attendance-empId", String(empId));
+    const now = new Date();
+    setSyncing(true);
+    window.dispatchEvent(new CustomEvent("RequestAttendanceSync", {
+      detail: { employeeId: empId, month: now.getMonth() + 1, year: now.getFullYear() }
+    }));
+    // Timeout fallback — if no response in 15s
+    setTimeout(() => setSyncing(false), 15000);
+  }, [employeeProfile, savedEntries]);
 
   useEffect(() => {
     const h = (event: MessageEvent) => {
@@ -275,6 +410,19 @@ function App() {
           </div>
           <div className="flex items-center gap-3">
             <button
+              onClick={() => setShowOnboarding(!showOnboarding)}
+              className={`w-8 h-8 inline-flex items-center justify-center rounded-md border border-hairline-strong bg-canvas text-charcoal hover:bg-hairline-soft transition-colors relative ${showOnboarding ? "text-primary" : ""}`}
+              aria-label="Setup & Downloads"
+              title="Setup & Downloads"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" />
+              </svg>
+              {hasUpdate && (
+                <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-primary rounded-full" />
+              )}
+            </button>
+            <button
               onClick={() => {
                 const html = document.documentElement;
                 const newDark = !isDark;
@@ -304,6 +452,29 @@ function App() {
               Sync Attendance
               <span className="text-[10px] opacity-70 font-mono">v{BOOKMARKLET_VERSION}</span>
             </a>
+            {extensionAvailable && (
+              <button
+                onClick={handleSyncNow}
+                disabled={syncing}
+                className="px-4 h-9 inline-flex items-center gap-2 border border-hairline-strong bg-canvas text-ink rounded-md text-sm font-medium hover:bg-hairline-soft transition-colors disabled:opacity-50"
+              >
+                {syncing ? (
+                  <>
+                    <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4 31.4" strokeLinecap="round" />
+                    </svg>
+                    Syncing…
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                    </svg>
+                    Sync Now
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -329,7 +500,7 @@ function App() {
       <div className="flex flex-1 overflow-hidden">
         {/* Toast notification */}
         {toast && (
-          <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 bg-ink text-on-dark text-xs font-medium rounded-md shadow-card animate-[fadeIn_0.2s_ease-out]">
+          <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 bg-[#1c1917] text-white text-xs font-medium rounded-md shadow-card animate-[fadeIn_0.2s_ease-out]">
             {toast}
           </div>
         )}
@@ -366,8 +537,21 @@ function App() {
         {/* Main */}
         <main className="flex-1 overflow-y-auto">
           <div className="px-8 py-8 space-y-8 max-w-[1280px]">
-            {!attendanceData ? (
+            {(!attendanceData || showOnboarding) ? (
               <div className="flex flex-col items-center justify-center py-20 text-center">
+                {showOnboarding && attendanceData && (
+                  <button
+                    onClick={() => { setShowOnboarding(false); setHasUpdate(false); }}
+                    className="mb-6 text-sm text-link hover:underline font-medium"
+                  >
+                    ← Back to dashboard
+                  </button>
+                )}
+                {hasUpdate && (
+                  <div className="mb-6 px-5 py-3 rounded-lg bg-cream border border-beige-deep text-sm text-charcoal">
+                    <strong className="text-ink">Update available!</strong> Download the latest extension (v{EXTENSION_VERSION}) and re-drag the bookmarklet (v{BOOKMARKLET_VERSION}).
+                  </div>
+                )}
                 <div className="mb-10">
                   <h2 className="font-display text-4xl font-medium text-ink tracking-display mb-3">
                     Know your hours in seconds
@@ -409,9 +593,19 @@ function App() {
                       </div>
                     </div>
                   </div>
-                  <div className="mt-6 pt-5 border-t border-beige-deep">
-                    <p className="text-xs text-stone text-center">
-                      Have the Chrome extension? Just visit HROne and data syncs automatically.
+                  <div className="mt-6 pt-5 border-t border-beige-deep text-center space-y-2">
+                    <a
+                      href="/attendance-extension.zip"
+                      download="attendance-extension.zip"
+                      className="inline-flex items-center gap-2 px-4 py-2 border border-hairline-strong bg-canvas text-ink rounded-md text-sm font-medium hover:bg-hairline-soft transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                      </svg>
+                      Download Extension
+                    </a>
+                    <p className="text-[11px] text-stone">
+                      Unzip → chrome://extensions → Developer mode → Load unpacked
                     </p>
                   </div>
                 </div>
@@ -451,22 +645,25 @@ function App() {
           </div>
         </main>
 
-        {/* Right Profile Panel — always visible */}
-        <ProfilePanel
-          profile={employeeProfile || {
-            employeeId: 0,
-            employeeCode: "",
-            employeeName: userName || "Employee",
-            designation: "",
-            department: "",
-            email: "",
-            phone: "",
-            dateOfJoining: "",
-            reportingManager: "",
-            profileImageUrl: null,
-          }}
-          yesterdayRecord={yesterdayRecord}
-        />
+        {/* Right Profile Panel — only visible after first sync */}
+        {attendanceData && (
+          <ProfilePanel
+            profile={employeeProfile || {
+              employeeId: 0,
+              employeeCode: "",
+              employeeName: userName || "Employee",
+              designation: "",
+              department: "",
+              email: "",
+              phone: "",
+              dateOfJoining: "",
+              reportingManager: "",
+              profileImageUrl: null,
+            }}
+            yesterdayRecord={yesterdayRecord}
+            todayAttendance={todayAttendance}
+          />
+        )}
       </div>
     </div>
   );

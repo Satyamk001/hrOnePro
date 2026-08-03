@@ -28,19 +28,23 @@ window.addEventListener("InterceptedAttendanceData", function (event) {
   );
 
   // Step 3: Forward to background service worker
-  chrome.runtime.sendMessage(
-    {
-      type: "ATTENDANCE_DATA_INTERCEPTED",
-      payload: { records, sourceUrl },
-    },
-    (response) => {
-      if (chrome.runtime.lastError) {
-        console.error("[Attendance Interceptor] content.js: sendMessage failed:", chrome.runtime.lastError.message);
-      } else {
-        console.log("[Attendance Interceptor] content.js: background acknowledged:", response);
+  try {
+    chrome.runtime.sendMessage(
+      {
+        type: "ATTENDANCE_DATA_INTERCEPTED",
+        payload: { records, sourceUrl },
+      },
+      (response) => {
+        if (chrome.runtime.lastError) {
+          console.warn("[Attendance Interceptor] content.js: sendMessage failed (extension may have been reloaded). Refresh this page.");
+        } else {
+          console.log("[Attendance Interceptor] content.js: background acknowledged:", response);
+        }
       }
-    }
-  );
+    );
+  } catch (e) {
+    console.warn("[Attendance Interceptor] content.js: Extension context invalidated. Refresh this page.");
+  }
 });
 
 // Listen for profile data
@@ -53,19 +57,42 @@ window.addEventListener("InterceptedProfileData", function (event) {
     ", forwarding to background..."
   );
 
-  chrome.runtime.sendMessage(
-    {
-      type: "PROFILE_DATA_INTERCEPTED",
-      payload: { profile },
-    },
-    (response) => {
-      if (chrome.runtime.lastError) {
-        console.error("[Attendance Interceptor] content.js: profile sendMessage failed:", chrome.runtime.lastError.message);
-      } else {
-        console.log("[Attendance Interceptor] content.js: background acknowledged profile:", response);
+  try {
+    chrome.runtime.sendMessage(
+      {
+        type: "PROFILE_DATA_INTERCEPTED",
+        payload: { profile },
+      },
+      (response) => {
+        if (chrome.runtime.lastError) {
+          console.warn("[Attendance Interceptor] content.js: profile sendMessage failed (extension reloaded?).");
+        } else {
+          console.log("[Attendance Interceptor] content.js: background acknowledged profile:", response);
+        }
       }
-    }
-  );
+    );
+  } catch (e) {
+    console.warn("[Attendance Interceptor] content.js: Extension context invalidated for profile send.");
+  }
 });
 
 console.log("[Attendance Interceptor] content.js loaded on:", window.location.href);
+
+
+// Listen for today's punch data
+window.addEventListener("InterceptedTodayPunches", function (event) {
+  const { punches } = event.detail;
+  console.log("[Attendance Interceptor] content.js: received", punches.length, "punches for today");
+  try {
+    chrome.runtime.sendMessage(
+      { type: "TODAY_PUNCHES_INTERCEPTED", payload: { punches } },
+      (response) => {
+        if (chrome.runtime.lastError) {
+          console.warn("[Attendance Interceptor] content.js: punch sendMessage failed");
+        }
+      }
+    );
+  } catch (e) {
+    console.warn("[Attendance Interceptor] content.js: Extension context invalidated for punch send.");
+  }
+});

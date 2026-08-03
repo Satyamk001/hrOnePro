@@ -119,3 +119,26 @@ export interface EmployeeProfile {
   reportingManager: string;
   profileImageUrl: string | null;
 }
+
+/**
+ * Raw punch entry from HROne RawPunch API
+ */
+export interface RawPunch {
+  employeeId: number;
+  punchDateTime: string;
+  punchSource: string;
+  punchSourceCode: string;
+  isPunchExcluded: boolean;
+}
+
+/**
+ * Today's attendance derived from raw punches
+ */
+export interface TodayAttendance {
+  date: string;
+  firstPunch: string;
+  lastPunch: string;
+  punchCount: number;
+  workedMinutesSoFar: number;
+  isStillIn: boolean;
+}

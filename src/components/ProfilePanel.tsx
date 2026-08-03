@@ -1,12 +1,13 @@
-import type { EmployeeProfile, EnrichedRecord } from "../types";
+import type { EmployeeProfile, EnrichedRecord, TodayAttendance } from "../types";
 import { formatMinutes, parseHHMM } from "../utils/timeCalculator";
 
 interface ProfilePanelProps {
   profile: EmployeeProfile;
   yesterdayRecord: EnrichedRecord | null;
+  todayAttendance: TodayAttendance | null;
 }
 
-export default function ProfilePanel({ profile, yesterdayRecord }: ProfilePanelProps) {
+export default function ProfilePanel({ profile, yesterdayRecord, todayAttendance }: ProfilePanelProps) {
   const initials = profile.employeeName
     .split(" ")
     .slice(0, 2)
@@ -50,19 +51,47 @@ export default function ProfilePanel({ profile, yesterdayRecord }: ProfilePanelP
           {profile.email && (
             <ProfileField label="Email" value={profile.email} />
           )}
-          {/* {profile.dateOfJoining && (
+          {profile.dateOfJoining && (
             <ProfileField
               label="Joined"
               value={new Date(profile.dateOfJoining).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
             />
-          )} */}
+          )}
           {profile.reportingManager && (
             <ProfileField label="Reports to" value={profile.reportingManager} />
           )}
         </div>
 
-        {/* Last Working Day Attendance */}
-        {yesterdayRecord && (
+        {/* Today's Attendance (from raw punches) */}
+        {todayAttendance ? (
+          <div className="rounded-lg border border-hairline bg-canvas p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[1px] text-steel mb-3">Today</p>
+            <div className="space-y-2">
+              <div className="flex justify-between">
+                <span className="text-xs text-steel">First Punch</span>
+                <span className="text-xs font-mono text-ink">{todayAttendance.firstPunch}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-xs text-steel">Last Punch</span>
+                <span className="text-xs font-mono text-ink">{todayAttendance.lastPunch}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-xs text-steel">Worked So Far</span>
+                <span className="text-xs font-mono font-medium text-ink">{formatMinutes(todayAttendance.workedMinutesSoFar)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-xs text-steel">Punches</span>
+                <span className="text-xs text-ink">{todayAttendance.punchCount}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-xs text-steel">Status</span>
+                <span className={`text-xs font-medium ${todayAttendance.isStillIn ? "text-primary" : "text-steel"}`}>
+                  {todayAttendance.isStillIn ? "In Office" : "Left"}
+                </span>
+              </div>
+            </div>
+          </div>
+        ) : yesterdayRecord ? (
           <div className="rounded-lg border border-hairline bg-canvas p-4">
             <p className="text-[11px] font-semibold uppercase tracking-[1px] text-steel mb-3">Last Working Day</p>
             {yesterdayRecord.isWorkedDay ? (
@@ -110,7 +139,7 @@ export default function ProfilePanel({ profile, yesterdayRecord }: ProfilePanelP
               <p className="text-xs text-slate">{yesterdayRecord.status} — not a working day</p>
             )}
           </div>
-        )}
+        ) : null}
       </div>
     </aside>
   );

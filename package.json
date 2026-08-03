@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 3333",
-    "build": "tsc -b && vite build",
+    "build": "node scripts/zip-extension.mjs && tsc -b && vite build",
+    "zip-ext": "node scripts/zip-extension.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest --run"
