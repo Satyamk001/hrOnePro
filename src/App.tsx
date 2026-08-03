@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
-import type { AttendanceRecord, DashboardMetrics, EnrichedRecord } from "./types";
+import type { AttendanceRecord, DashboardMetrics, EnrichedRecord, EmployeeProfile } from "./types";
 import { classifyRecord } from "./utils/classifier";
 import {
   computeRecordMetrics,
@@ -7,12 +7,15 @@ import {
   formatMinutes,
   parseHHMM,
 } from "./utils/timeCalculator";
+import { generateBookmarkletCode } from "./bookmarklet";
 import Dashboard from "./components/Dashboard";
 import DayTable from "./components/DayTable";
+import ProfilePanel from "./components/ProfilePanel";
 
 const STORAGE_KEY = "attendance-insights-data";
 const USER_KEY = "attendance-insights-user";
-const BOOKMARKLET_VERSION = "2";
+const PROFILE_KEY = "attendance-insights-profile";
+const BOOKMARKLET_VERSION = "3";
 const BOOKMARKLET_VERSION_KEY = "attendance-bookmarklet-version";
 
 interface SavedEntry { label: string; key: string; records: AttendanceRecord[]; }
@@ -50,31 +53,64 @@ function getYesterdayDate(): string {
   const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().split("T")[0];
 }
 
-function YesterdaySummary({ records, allEntries }: { records: EnrichedRecord[]; allEntries: SavedEntry[] }) {
-  const yesterday = getYesterdayDate();
-  let rec = records.find((r) => r.attendanceDate === yesterday);
-  if (!rec && allEntries.length > 0) {
-    for (const entry of allEntries) {
-      const match = entry.records.map((r) => ({ ...r, attendanceDate: r.attendanceDate.split("T")[0] })).find((r) => r.attendanceDate === yesterday);
-      if (match) { rec = computeRecordMetrics(classifyRecord(match)); break; }
+const NON_WORKING_STATUSES = new Set(["Week Off", "Holiday"]);
+
+/** Walk backwards from yesterday up to 7 days to find the most recent working day record */
+function findLastWorkingDayRecord(
+  enrichedRecords: EnrichedRecord[] | null,
+  allEntries: SavedEntry[]
+): { record: EnrichedRecord; date: string; daysAgo: number } | null {
+  for (let daysBack = 1; daysBack <= 7; daysBack++) {
+    const d = new Date();
+    d.setDate(d.getDate() - daysBack);
+    const dateStr = d.toISOString().split("T")[0];
+
+    let rec: EnrichedRecord | undefined;
+
+    if (enrichedRecords) {
+      rec = enrichedRecords.find((r) => r.attendanceDate === dateStr);
     }
+
+    if (!rec && allEntries.length > 0) {
+      for (const entry of allEntries) {
+        const match = entry.records
+          .map((r) => ({ ...r, attendanceDate: r.attendanceDate.split("T")[0] }))
+          .find((r) => r.attendanceDate === dateStr);
+        if (match) { rec = computeRecordMetrics(classifyRecord(match)); break; }
+      }
+    }
+
+    if (!rec) continue;
+    // If this day is a non-working day, skip and keep looking
+    if (NON_WORKING_STATUSES.has(rec.status)) continue;
+    return { record: rec, date: dateStr, daysAgo: daysBack };
   }
-  if (!rec) {
+  return null;
+}
+
+function YesterdaySummary({ records, allEntries }: { records: EnrichedRecord[]; allEntries: SavedEntry[] }) {
+  const result = findLastWorkingDayRecord(records, allEntries);
+  if (!result) {
+    const yesterday = getYesterdayDate();
     return (
       <div className="rounded-lg border border-hairline bg-cream p-5">
-        <p className="text-xs font-medium uppercase tracking-wide text-steel">Yesterday</p>
-        <p className="text-sm text-slate mt-1">No data for yesterday ({new Date(yesterday).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })})</p>
+        <p className="text-xs font-medium uppercase tracking-wide text-steel">Last Working Day</p>
+        <p className="text-sm text-slate mt-1">No recent working day data ({new Date(yesterday).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })})</p>
       </div>
     );
   }
 
+  const rec = result.record;
+  const dateLabel = new Date(result.date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
   const shift = parseHHMM(rec.shiftEndTime) - parseHHMM(rec.shiftStartTime);
   const ed = rec.extraDeficitMinutes;
 
   return (
     <div className="rounded-lg border border-beige-deep bg-cream p-5">
       <div className="flex items-center justify-between mb-4">
-        <p className="text-xs font-medium uppercase tracking-wide text-steel">Yesterday</p>
+        <p className="text-xs font-medium uppercase tracking-wide text-steel">
+          {result.daysAgo === 1 ? "Yesterday" : dateLabel}
+        </p>
         <span className="text-xs font-medium text-charcoal bg-cream-deeper px-2 py-0.5 rounded-full">{rec.status}</span>
       </div>
       {rec.isWorkedDay ? (
@@ -120,9 +156,12 @@ function App() {
   const [toast, setToast] = useState<string | null>(null);
   const [lastSynced, setLastSynced] = useState<string | null>(() => localStorage.getItem("attendance-last-synced"));
   const [bookmarkletOutdated, setBookmarkletOutdated] = useState(false);
+  const [employeeProfile, setEmployeeProfile] = useState<EmployeeProfile | null>(() => {
+    try { const raw = localStorage.getItem(PROFILE_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; }
+  });
 
   const appUrl = window.location.origin;
-  const bookmarkletCode = `javascript:void((function(){var BV='${BOOKMARKLET_VERSION}';var u='${appUrl}';if(!location.hostname.includes('hrone.cloud')){alert('Run this on HROne portal');return}var y,m;try{var sel=document.querySelector('select[class*=month],select[class*=attendance],.ant-select-selection-item,[class*=CalendarDropdown] select');if(sel){var txt=sel.value||sel.textContent||sel.innerText;var parts=txt.match(/(\\w+)[,\\s]+(\\d{4})/);if(parts){var months={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};m=months[parts[1].toLowerCase().substring(0,3)];y=parseInt(parts[2])}}if(!m||!y){var allText=document.body.innerText;var match=allText.match(/Attendance for[:\\s]*(\\w+)[,\\s]+(\\d{4})/i);if(match){var months2={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};m=months2[match[1].toLowerCase().substring(0,3)];y=parseInt(match[2])}}}catch(e){}if(!m||!y){var d=new Date();y=d.getFullYear();m=d.getMonth()+1}var eid=0;try{eid=parseInt(localStorage.getItem('attendance-empId'))||0;if(!eid){var keys=Object.keys(localStorage);for(var k=0;k<keys.length;k++){var v=localStorage.getItem(keys[k]);if(v&&v.indexOf('employeeId')>-1){try{var o=JSON.parse(v);eid=parseInt(o.employeeId||o.EmployeeId)||0}catch(e){}}if(eid)break}}if(!eid)eid=parseInt(prompt('Enter your Employee ID (find it in HROne profile):')||'0')}catch(e){eid=parseInt(prompt('Enter your Employee ID:')||'0')}if(!eid){alert('Employee ID required');return}localStorage.setItem('attendance-empId',String(eid));var userName='';try{var nameEl=document.body.innerText.match(/([A-Z][a-z]+ [A-Z][a-z]+)\\s*\\(#[A-Z0-9]+\\)/);if(nameEl)userName=nameEl[1];if(!userName){var h=document.querySelector('h1,h2,h3,.employee-name,.user-name,[class*=employeeName],[class*=userName]');if(h)userName=h.textContent.trim().split('(')[0].trim()}}catch(e){}fetch(location.origin+'/api/timeoffice/attendance/Calendar',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json, text/plain, */*','domaincode':'mapmyindia','accessmode':'W','x-requested-with':location.origin,'cache-control':'no-cache','pragma':'no-cache'},credentials:'include',body:JSON.stringify({attendanceYear:y,attendanceMonth:m,employeeId:eid,calendarViewType:'C'})}).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.text()}).then(function(text){if(!text)throw new Error('Empty response');var data=JSON.parse(text);var records=Array.isArray(data)?data:(data.data||data.result||[]);if(!records.length){alert('No records found for '+m+'/'+y);return}var w=window.open(u,'attendance-insights');var i=0;var s=function(){i++;try{w.postMessage({type:'ATTENDANCE_DATA',records:records,userName:userName,employeeId:eid,v:BV},'*')}catch(e){}if(i<15)setTimeout(s,500)};setTimeout(s,1000)}).catch(function(e){alert('Error: '+e.message+'\\n\\nMake sure you are logged in to HROne.')})})())`;
+  const bookmarkletCode = generateBookmarkletCode(appUrl, BOOKMARKLET_VERSION);
 
   const bookmarkletRef = useRef<HTMLAnchorElement>(null);
   useEffect(() => { if (bookmarkletRef.current) bookmarkletRef.current.setAttribute("href", bookmarkletCode); }, [bookmarkletCode]);
@@ -162,12 +201,34 @@ function App() {
     return () => window.removeEventListener("AttendanceDataFromExtension", h);
   }, [handleDataParsed]);
 
+  // Listen for profile data from extension
+  useEffect(() => {
+    const h = (event: Event) => {
+      const e = event as CustomEvent<{ profile: EmployeeProfile }>;
+      if (e.detail?.profile) {
+        setEmployeeProfile(e.detail.profile);
+        localStorage.setItem(PROFILE_KEY, JSON.stringify(e.detail.profile));
+        if (e.detail.profile.employeeName) {
+          setUserName(e.detail.profile.employeeName);
+          localStorage.setItem(USER_KEY, e.detail.profile.employeeName);
+        }
+      }
+    };
+    window.addEventListener("ProfileDataFromExtension", h);
+    return () => window.removeEventListener("ProfileDataFromExtension", h);
+  }, []);
+
   useEffect(() => {
     const h = (event: MessageEvent) => {
       if (event.origin !== window.location.origin && !event.origin.includes("hrone.cloud")) return;
       if (event.data?.type === "ATTENDANCE_DATA" && Array.isArray(event.data.records)) {
         handleDataParsed(event.data.records);
         if (event.data.userName) { setUserName(event.data.userName); localStorage.setItem(USER_KEY, event.data.userName); }
+        // Handle profile data
+        if (event.data.profile) {
+          setEmployeeProfile(event.data.profile);
+          localStorage.setItem(PROFILE_KEY, JSON.stringify(event.data.profile));
+        }
         const incomingVersion = event.data.v;
         if (!incomingVersion || incomingVersion !== BOOKMARKLET_VERSION) {
           setBookmarkletOutdated(true);
@@ -196,6 +257,12 @@ function App() {
   }, [enrichedRecords, showAllDays]);
 
   const activeLabel = savedEntries.find((e) => e.key === activeKey)?.label;
+
+  // Compute last working day record for the profile panel
+  const yesterdayRecord = useMemo<EnrichedRecord | null>(() => {
+    const result = findLastWorkingDayRecord(enrichedRecords, savedEntries);
+    return result ? result.record : null;
+  }, [enrichedRecords, savedEntries]);
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-canvas">
@@ -383,6 +450,23 @@ function App() {
             )}
           </div>
         </main>
+
+        {/* Right Profile Panel — always visible */}
+        <ProfilePanel
+          profile={employeeProfile || {
+            employeeId: 0,
+            employeeCode: "",
+            employeeName: userName || "Employee",
+            designation: "",
+            department: "",
+            email: "",
+            phone: "",
+            dateOfJoining: "",
+            reportingManager: "",
+            profileImageUrl: null,
+          }}
+          yesterdayRecord={yesterdayRecord}
+        />
       </div>
     </div>
   );

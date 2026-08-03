@@ -103,3 +103,19 @@ export interface DashboardMetrics extends AggregateMetrics {
 export type ParseResult =
   | { success: true; data: AttendanceRecord[] }
   | { success: false; error: string };
+
+/**
+ * Employee profile data from HROne API
+ */
+export interface EmployeeProfile {
+  employeeId: number;
+  employeeCode: string;
+  employeeName: string;
+  designation: string;
+  department: string;
+  email: string;
+  phone: string;
+  dateOfJoining: string;
+  reportingManager: string;
+  profileImageUrl: string | null;
+}

@@ -43,4 +43,29 @@ window.addEventListener("InterceptedAttendanceData", function (event) {
   );
 });
 
+// Listen for profile data
+window.addEventListener("InterceptedProfileData", function (event) {
+  const { profile } = event.detail;
+
+  console.log(
+    "[Attendance Interceptor] content.js: received profile for",
+    profile.employeeName,
+    ", forwarding to background..."
+  );
+
+  chrome.runtime.sendMessage(
+    {
+      type: "PROFILE_DATA_INTERCEPTED",
+      payload: { profile },
+    },
+    (response) => {
+      if (chrome.runtime.lastError) {
+        console.error("[Attendance Interceptor] content.js: profile sendMessage failed:", chrome.runtime.lastError.message);
+      } else {
+        console.log("[Attendance Interceptor] content.js: background acknowledged profile:", response);
+      }
+    }
+  );
+});
+
 console.log("[Attendance Interceptor] content.js loaded on:", window.location.href);

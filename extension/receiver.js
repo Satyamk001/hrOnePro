@@ -9,7 +9,7 @@ console.log("[Attendance Interceptor] receiver.js loaded on:", window.location.h
 // Listen for messages from background service worker
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "ATTENDANCE_DATA_RECEIVED") {
-    const { records } = message.payload;
+    const { records, profile } = message.payload;
 
     console.log(
       "[Attendance Interceptor] receiver.js: got",
@@ -17,13 +17,35 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       "records — dispatching to React app via CustomEvent"
     );
 
-    // Dispatch a custom event on the window that the React app listens for
+    // Dispatch attendance data
     window.dispatchEvent(
       new CustomEvent("AttendanceDataFromExtension", {
         detail: { records },
       })
     );
 
+    // Dispatch profile if available
+    if (profile) {
+      console.log("[Attendance Interceptor] receiver.js: also dispatching profile for", profile.employeeName);
+      window.dispatchEvent(
+        new CustomEvent("ProfileDataFromExtension", {
+          detail: { profile },
+        })
+      );
+    }
+
+    sendResponse({ success: true });
+    return true;
+  }
+
+  if (message.type === "PROFILE_DATA_RECEIVED") {
+    const { profile } = message.payload;
+    console.log("[Attendance Interceptor] receiver.js: got profile for", profile.employeeName);
+    window.dispatchEvent(
+      new CustomEvent("ProfileDataFromExtension", {
+        detail: { profile },
+      })
+    );
     sendResponse({ success: true });
     return true;
   }

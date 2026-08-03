@@ -44,36 +44,71 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       lastSourceUrl: sourceUrl,
     });
 
-    // Find the React app tab and forward data
-    chrome.tabs.query({}, (allTabs) => {
-      const appTabs = allTabs.filter(isAppTab);
+    // Find the React app tab and forward data (include stored profile if available)
+    chrome.storage.local.get(["lastProfileData"], (profileResult) => {
+      const profile = profileResult.lastProfileData || null;
 
-      console.log(
-        "[Attendance Interceptor] Background: found",
-        appTabs.length,
-        "app tab(s)"
-      );
+      chrome.tabs.query({}, (allTabs) => {
+        const appTabs = allTabs.filter(isAppTab);
 
-      if (appTabs.length > 0) {
-        for (const tab of appTabs) {
-          chrome.tabs.sendMessage(
-            tab.id,
-            { type: "ATTENDANCE_DATA_RECEIVED", payload: { records } },
-            (response) => {
-              if (chrome.runtime.lastError) {
-                console.warn("[Attendance Interceptor] Background: failed to send to tab", tab.id, ":", chrome.runtime.lastError.message);
-              } else {
-                console.log("[Attendance Interceptor] Background: sent to tab", tab.id, response);
+        console.log(
+          "[Attendance Interceptor] Background: found",
+          appTabs.length,
+          "app tab(s)"
+        );
+
+        if (appTabs.length > 0) {
+          for (const tab of appTabs) {
+            chrome.tabs.sendMessage(
+              tab.id,
+              { type: "ATTENDANCE_DATA_RECEIVED", payload: { records, profile } },
+              (response) => {
+                if (chrome.runtime.lastError) {
+                  console.warn("[Attendance Interceptor] Background: failed to send to tab", tab.id, ":", chrome.runtime.lastError.message);
+                } else {
+                  console.log("[Attendance Interceptor] Background: sent to tab", tab.id, response);
+                }
               }
-            }
-          );
+            );
+          }
+        } else {
+          console.log("[Attendance Interceptor] Background: no app tabs found. Data saved to storage — will auto-send when app opens.");
         }
-      } else {
-        console.log("[Attendance Interceptor] Background: no app tabs found. Data saved to storage — will auto-send when app opens.");
-      }
+      });
     });
 
     sendResponse({ success: true, recordCount: records.length });
+    return true;
+  }
+
+  if (message.type === "PROFILE_DATA_INTERCEPTED") {
+    const { profile } = message.payload;
+
+    console.log(
+      "[Attendance Interceptor] Background: received profile for",
+      profile.employeeName
+    );
+
+    // Store profile persistently
+    chrome.storage.local.set({ lastProfileData: profile });
+
+    // Also forward to app tab immediately
+    chrome.tabs.query({}, (allTabs) => {
+      const appTabs = allTabs.filter(isAppTab);
+      for (const tab of appTabs) {
+        chrome.tabs.sendMessage(
+          tab.id,
+          { type: "PROFILE_DATA_RECEIVED", payload: { profile } },
+          (response) => {
+            if (chrome.runtime.lastError) {
+              // tab might not have receiver.js yet
+            }
+          }
+        );
+      }
+    });
+
+    sendResponse({ success: true });
     return true;
   }
 });

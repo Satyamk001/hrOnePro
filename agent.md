@@ -12,50 +12,54 @@ The tool is designed for zero-friction usage: data flows automatically from HROn
 |-------|-----------|
 | Frontend | React 19 + TypeScript |
 | Build Tool | Vite 6 |
-| Styling | TailwindCSS 3 with CSS custom properties (dark/light theme) |
-| Design System | Geist-inspired: ink-on-white, hairline borders, Inter/JetBrains Mono fonts |
+| Styling | TailwindCSS 3 with CSS custom properties (Mistral-inspired warm theme) |
+| Design System | Mistral-inspired: orange/cream palette, Playfair Display + Inter fonts, sunset stripe |
 | Testing | Vitest + fast-check (property-based testing) + @testing-library/react |
 | Data Persistence | localStorage (client-side, no backend) |
-| Data Ingestion | Chrome Extension (Manifest V3) + Bookmarklet + postMessage |
+| Data Ingestion | Chrome Extension (Manifest V3) + Bookmarklet (v3) + postMessage |
 | Deployment | Static files served via Nginx on WSL or `npx serve` |
 
-## Design System (Geist-Inspired)
+## Design System (Mistral-Inspired)
 
-The UI follows a Vercel/Geist-inspired design language:
+The UI follows a Mistral AI-inspired design language with warm orange/cream tones:
 
 ### Colors (CSS Variables — auto-switch with theme)
 | Token | Light | Dark | Use |
 |-------|-------|------|-----|
-| `--color-canvas` | #fafafa | #0a0a0a | Page background |
-| `--color-elevated` | #ffffff | #171717 | Cards, surfaces |
-| `--color-ink` | #171717 | #ededed | Headings, primary text |
-| `--color-body` | #4d4d4d | #a1a1a1 | Body copy |
-| `--color-mute` | #8f8f8f | #6b6b6b | Captions, labels |
-| `--color-faint` | #a1a1a1 | #4d4d4d | Placeholders |
-| `--color-hairline` | #ebebeb | #2e2e2e | Borders, dividers |
-| `--color-hairline-soft` | #f2f2f2 | #1a1a1a | Hover backgrounds |
+| `--color-canvas` | #ffffff | #0f0e0c | Page background |
+| `--color-surface` | #fafaf9 | #171614 | Sidebar, subtle backgrounds |
+| `--color-cream` | #fef9ec | #292218 | Feature cards, form panels |
+| `--color-primary` | #f97316 | #fb923c | CTA buttons, active states |
+| `--color-ink` | #1c1917 | #fafaf9 | Headings, primary text |
+| `--color-charcoal` | #44403c | #d6d3d1 | Body emphasis |
+| `--color-steel` | #78716c | #78716c | Labels, captions |
+| `--color-hairline` | #e7e5e4 | #2e2a26 | Borders, dividers |
+| `--color-beige-deep` | #e5d5b0 | #4a3f2a | Cream surface borders |
+| `--color-error` | #dc2626 | #f87171 | Deficit values |
+| `--color-warning` | #d97706 | #fbbf24 | Late arrivals |
 
 ### Typography
-- **Sans**: Inter (fallback: Geist Sans, Arial)
-- **Mono**: JetBrains Mono (fallback: Geist Mono) — used for eyebrow labels, time values
-- **Headings**: font-semibold with negative letter-spacing (-0.04em to -0.05em)
-- **Eyebrows**: 11px monospace uppercase with wide tracking
+- **Display**: Playfair Display (near-serif) — hero headings, month labels, stat numbers
+- **Sans**: Inter — body, navigation, buttons, labels, captions
+- **Mono**: JetBrains Mono — time values, code, version badges
+- **Headings**: font-medium with negative letter-spacing (-0.02em to -0.04em)
+- **Section eyebrows**: 11px semibold uppercase with 1px tracking
 
-### Surfaces & Depth
-- Cards: `bg-elevated` with 1px `border-hairline` — no shadows
-- Metrics grid: `gap-px bg-hairline` creates structural hairline grid
-- Hover states: `bg-hairline-soft` (subtle fill change)
+### Shapes & Elevation
+- Buttons: `rounded-md` (8px)
+- Cards: `rounded-lg` (12px)
+- Shadows: `shadow-subtle` (1px), `shadow-card` (4px 12px) — flat by default
+- Badges: `rounded-full` (pill shape, used sparingly)
+
+### Signature Element
+- **Sunset stripe band**: horizontal gradient (primary → sunshine-700 → sunshine-500 → yellow-saturated → cream) at the bottom of main content area
 
 ### Dark/Light Theme
 - Toggled via `.dark` class on `<html>`
+- Dark mode uses warm brown/charcoal tones (not cold blue-gray)
 - Persists to localStorage under key `"theme"`
 - Respects `prefers-color-scheme: dark` as initial fallback
 - No flash: inline script in `index.html` applies theme before React loads
-
-### Custom Scrollbar
-- 6px thin scrollbar using CSS variables
-- Thumb: `var(--color-hairline)`, hover: `var(--color-mute)`
-- Works in Firefox (`scrollbar-width: thin`) and Webkit (`::-webkit-scrollbar`)
 
 ## Architecture Overview
 
@@ -65,8 +69,9 @@ The UI follows a Vercel/Geist-inspired design language:
 ├────────────────────────────────────────────────────────────────────┤
 │                                                                    │
 │  ┌──────────────────┐    ┌──────────────────┐                    │
-│  │ Chrome Extension  │    │ Bookmarklet      │                    │
+│  │ Chrome Extension  │    │ Bookmarklet v3   │                    │
 │  │ (auto-intercept)  │    │ (one-click)      │                    │
+│  │ + profile capture │    │ + profile fetch  │                    │
 │  └────────┬─────────┘    └────────┬─────────┘                    │
 │           │ CustomEvent           │ postMessage                    │
 └───────────┼───────────────────────┼────────────────────────────────┘
@@ -81,11 +86,11 @@ The UI follows a Vercel/Geist-inspired design language:
 │  │                                                             │  │
 │  │  • Receives data from extension (CustomEvent) or            │  │
 │  │    bookmarklet (postMessage)                                │  │
-│  │  • Normalizes dates (strips T00:00:00)                      │  │
-│  │  • Derives month key, saves to localStorage                 │  │
+│  │  • Receives profile from extension or bookmarklet           │  │
+│  │  • Normalizes dates, derives month key, saves localStorage  │  │
 │  │  • Manages sidebar month selection (defaults to latest)     │  │
-│  │  • Stores/displays employee name                            │  │
-│  │  • Toggles dark/light theme                                 │  │
+│  │  • Bookmarklet version checking + outdated banner           │  │
+│  │  • Dark/light theme toggle                                  │  │
 │  └─────────────────────────┬───────────────────────────────────┘  │
 │                             │                                      │
 │                             ▼                                      │
@@ -102,14 +107,15 @@ The UI follows a Vercel/Geist-inspired design language:
 │  │              PRESENTATION LAYER                              │  │
 │  │                                                             │  │
 │  │  ┌────────────────┐  ┌──────────────┐  ┌───────────────┐  │  │
-│  │  │YesterdaySummary│  │  Dashboard   │  │DayTable (sort)│  │  │
-│  │  │(cross-month)   │  │(hero balance)│  │(filter toggle)│  │  │
+│  │  │LastWorkingDay  │  │  Dashboard   │  │DayTable (sort)│  │  │
+│  │  │(skips WO/Hol) │  │(hero balance)│  │(filter toggle)│  │  │
 │  │  └────────────────┘  └──────────────┘  └───────────────┘  │  │
+│  │                                                             │  │
+│  │  ┌────────────────┐                                        │  │
+│  │  │ ProfilePanel   │  Fixed right sidebar with employee      │  │
+│  │  │ (always shown) │  info + last working day summary        │  │
+│  │  └────────────────┘                                        │  │
 │  └─────────────────────────────────────────────────────────────┘  │
-│                                                                    │
-│  ┌──────────┐  SIDEBAR: Saved months — click to switch            │
-│  │ HEADER   │  Theme toggle + Sync bookmarklet button             │
-│  └──────────┘                                                      │
 └────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -120,94 +126,174 @@ attendance-tracker/
 ├── src/
 │   ├── App.tsx                    # Root component, state, theme, data listeners
 │   ├── main.tsx                   # React entry point
-│   ├── index.css                  # TailwindCSS + CSS variables + custom scrollbar
-│   ├── bookmarklet.js            # Bookmarklet source (reference, not bundled)
+│   ├── index.css                  # TailwindCSS + Mistral tokens + sunset stripe
+│   ├── bookmarklet.ts            # Bookmarklet code generator (v3, with profile fetch)
 │   ├── types/
-│   │   └── index.ts              # All TypeScript interfaces and types
+│   │   └── index.ts              # All TypeScript interfaces (incl. EmployeeProfile)
 │   ├── utils/
 │   │   ├── parser.ts             # JSON validation and parsing
 │   │   ├── classifier.ts         # Day status classification logic
 │   │   └── timeCalculator.ts     # Time arithmetic and aggregation
 │   ├── components/
-│   │   ├── Dashboard.tsx          # Hero net balance + metrics grid + day breakdown
-│   │   ├── DayTable.tsx           # Sortable table with mono time values
+│   │   ├── Dashboard.tsx          # Hero net balance + metrics grid + extremes
+│   │   ├── DayTable.tsx           # Sortable table with chevron indicators
+│   │   ├── ProfilePanel.tsx       # Right sidebar: employee card + last working day
 │   │   ├── Charts.tsx             # (unused — kept for reference)
 │   │   └── InputPanel.tsx         # (unused — kept for reference)
 │   ├── __tests__/
 │   │   └── integration.test.tsx   # Full data flow integration tests
 │   └── test/
 │       └── setup.ts              # Vitest setup (jest-dom, ResizeObserver mock)
-├── extension/                    # Chrome Extension v1.1.0
+├── extension/                    # Chrome Extension v2.0.0
 │   ├── manifest.json             # Manifest V3 — permissions: storage, tabs, scripting
-│   ├── pageWorld.js              # Patches fetch + XHR on HROne page
-│   ├── content.js                # Content script on HROne, relays intercepted data
-│   ├── background.js             # Service worker, routes data, programmatic injection
-│   └── receiver.js              # Content script on app tab, dispatches to React
+│   ├── pageWorld.js              # Patches fetch + XHR: intercepts attendance + profile
+│   ├── content.js                # Content script: relays attendance + profile data
+│   ├── background.js             # Service worker: routes data, stores profile
+│   └── receiver.js              # Content script on app tab: dispatches both events
 ├── dist/                         # Production build output
 ├── PRODUCT.md                    # Product context (Impeccable design system)
 ├── agent.md                      # This file
 ├── package.json
-├── index.html                    # Entry HTML with theme initialization script
+├── index.html                    # Entry HTML with Google Fonts + theme init
 ├── vite.config.ts
-├── tailwind.config.js            # Geist tokens, CSS variable colors, dark mode
+├── tailwind.config.js            # Mistral tokens, Playfair Display, warm dark mode
 ├── tsconfig.json / tsconfig.app.json / tsconfig.node.json
 └── postcss.config.js
 ```
 
-## Data Flow — Two Primary Ingestion Methods
+## Data Flow — Three Ingestion Methods
 
-### 1. Chrome Extension (Automatic — v1.1.0)
+### 1. Chrome Extension (Automatic — v2.0.0)
 
-For power users who install the extension. Fully automatic, no clicks needed:
+Fully automatic, intercepts both attendance AND profile API calls:
 
 ```
-User visits HROne calendar (app.hrone.cloud/app/myprofile/calendar)
-  → pageWorld.js intercepts fetch AND XHR to /api/timeoffice/attendance/Calendar
-  → Handles New Relic interference (re-patches fetch multiple times)
-  → content.js receives CustomEvent, sends to background.js
-  → background.js stores in chrome.storage.local
-  → background.js finds app tab (by URL or page title "Attendance Insights")
-  → For non-localhost: programmatically injects receiver.js via chrome.scripting
-  → receiver.js dispatches "AttendanceDataFromExtension" CustomEvent
-  → React App useEffect listener picks it up
+User visits HROne calendar or profile page
+  → pageWorld.js intercepts:
+    - /api/timeoffice/attendance/Calendar (attendance data)
+    - /api/workforce/Employee/EmployeeInformation/{id} (profile data)
+  → content.js receives CustomEvents, sends to background.js
+  → background.js stores both in chrome.storage.local
+  → background.js finds app tab, sends attendance + stored profile
+  → receiver.js dispatches:
+    - "AttendanceDataFromExtension" CustomEvent
+    - "ProfileDataFromExtension" CustomEvent
+  → React App useEffect listeners pick up both
   → Data processed, saved to localStorage, rendered
 ```
 
 **Extension features:**
-- Intercepts both `fetch` and `XMLHttpRequest` (handles New Relic patching conflicts)
-- Auto-detects app tab by URL pattern OR page title (works on any deployment)
+- Intercepts both `fetch` and `XMLHttpRequest`
+- Captures profile data from `/api/workforce/Employee/EmployeeInformation/{id}`
+- Profile persists in `chrome.storage.local` — sent with every attendance sync
+- Auto-detects app tab by URL pattern OR page title
 - Programmatic injection of receiver.js on non-localhost deployments
 - Auto-sends stored data to newly opened app tabs (10-minute window)
-- Stores backup in `chrome.storage.local`
 
-### 2. Bookmarklet (One-Click, Zero Install)
+### 2. Bookmarklet v3 (One-Click, Zero Install)
 
 For colleagues who won't install an extension:
 
 ```
-User drags "Sync Attendance" button to bookmarks bar (one time)
+User drags "Sync Attendance v3" button to bookmarks bar
   → On HROne calendar page, clicks the bookmark
-  → Bookmarklet detects selected month from page content
-  → Extracts employeeId from localStorage (or prompts once)
-  → Extracts user name from page heading
-  → Calls HROne API with credentials:include (uses live session cookie)
+  → Bookmarklet fetches BOTH:
+    - Employee profile (GET /api/workforce/Employee/EmployeeInformation/{id})
+    - Attendance data (POST /api/timeoffice/attendance/Calendar)
+  → Waits for both to complete (trySend pattern)
   → Opens React app via window.open()
-  → Sends records + userName via postMessage
-  → React App "message" event listener picks it up
-  → Data processed, saved to localStorage, rendered
+  → Sends records + profile + version via postMessage
+  → React app receives, stores profile, displays data
 ```
 
-**Bookmarklet features:**
-- Detects which month is selected on HROne's calendar dropdown
-- Extracts employeeId from localStorage (remembers after first prompt)
-- Extracts employee name from page (e.g., "Satyam Kumar (#CE00172125)")
-- Uses `credentials: 'include'` to piggyback on the live HROne session
-- Sends data via `postMessage` — no paste needed
-- Works for any HROne user (employee ID is per-user)
+**Bookmarklet v3 features:**
+- Fetches employee profile in parallel with attendance
+- Uses `trySend()` pattern — waits for BOTH fetches before sending
+- 5-second timeout on profile fetch (doesn't block if profile API fails)
+- Version field (`v:'3'`) for outdated detection
+- Console logging for debugging
 
 ### 3. localStorage Persistence
 
-All data persists to `localStorage` keyed by month (e.g., "2026-07"). On page load, the most recent month is automatically displayed. Users switch between saved months via the sidebar.
+All data persists to `localStorage`:
+- `attendance-insights-data` — month-keyed attendance records
+- `attendance-insights-user` — employee name
+- `attendance-insights-profile` — full employee profile object
+- `attendance-bookmarklet-version` — last synced bookmarklet version
+- `attendance-last-synced` — ISO timestamp of last sync
+
+## HROne API Integration
+
+### Attendance Endpoint
+```
+POST https://app.hrone.cloud/api/timeoffice/attendance/Calendar
+```
+Request body: `{ attendanceYear, attendanceMonth, employeeId, calendarViewType: "C" }`
+
+### Employee Profile Endpoint
+```
+GET https://app.hrone.cloud/api/workforce/Employee/EmployeeInformation/{employeeId}
+```
+Response: Array with one object containing:
+- `employeeId`, `employeeCode`, `employeeName`
+- `designation`, `department`, `branch`
+- `officialEmail`, `personalEmail`, `mobileNo`
+- `reportingManager`, `dateOfJoining`
+- `imageVirtualPath` (CDN URL for profile photo)
+- `thumbnailFileName` (resized photo URL)
+
+### Key Notes
+- Both APIs use same-origin cookies (`credentials: 'include'`)
+- `domaincode: mapmyindia` and `accessmode: W` headers required
+- Profile API returns an array (take `[0]`)
+- `JwtTokenCookie` is HttpOnly — sent automatically by browser
+
+## UI Layout
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│  Header: "Attendance Insights / Satyam Kumar"  [☽] [Sync Attendance v3] │
+├──────────────────────────────────────────────────────────────────────────┤
+│  (Outdated bookmarklet banner — shown only when version mismatch)        │
+├─────────┬──────────────────────────────────────────────┬─────────────────┤
+│ HISTORY │                                              │ PROFILE PANEL   │
+│         │  August 2026  (Playfair Display heading)     │                 │
+│ Aug 26  │                                              │  [Avatar]       │
+│ Jul 26  │  ┌─ Last Working Day (cream card) ────────┐ │  Satyam Kumar   │
+│         │  │ Fri, Aug 1: In 09:43  Worked 9h 2m     │ │  CE00172125     │
+│         │  └─────────────────────────────────────────┘ │  Software Assoc │
+│         │                                              │  SD - HD Map    │
+│         │  ┌─ NET BALANCE (cream hero card) ─────────┐ │                 │
+│         │  │ +4h 32m  (Playfair 5xl)                 │ │  Email          │
+│         │  │ Overtime | Shortfall | Avg | Total      │ │  Joined         │
+│         │  └─────────────────────────────────────────┘ │  Reports to     │
+│         │                                              │                 │
+│         │  ┌─ Metrics Grid (individual cards) ───────┐ │  ┌─ Last Day ─┐│
+│         │  │ Worked │ Present │ Late │ Week Off      │ │  │ Status      ││
+│         │  │ Holiday│ Leave   │ Half │ Pending       │ │  │ In / Out    ││
+│         │  └─────────────────────────────────────────┘ │  │ Worked      ││
+│         │                                              │  │ +/- Shift   ││
+│         │  WORKED DAYS       [Show all days]           │  └─────────────┘│
+│         │  ┌─ Table (sortable, chevron indicators) ──┐ │                 │
+│         │  │ Date Day Status In Out Worked +/- Late  │ │                 │
+│         │  └─────────────────────────────────────────┘ │                 │
+│         │                                              │                 │
+│         │  ═══ sunset stripe gradient ═══              │                 │
+│         │                                              │                 │
+└─────────┴──────────────────────────────────────────────┴─────────────────┘
+```
+
+## Key UX Features
+
+- **No manual input** — data arrives via extension (auto) or bookmarklet (one click)
+- **Employee profile panel** — fixed right sidebar showing photo, name, designation, department, manager, and last working day summary
+- **Last Working Day** — skips Week Off and Holiday (walks back up to 7 days)
+- **Bookmarklet versioning** — v3 badge visible in button; outdated banner shown on version mismatch
+- **Sortable table** — chevron up/down indicators, visible on hover, highlighted when active (orange accent)
+- **Dark mode** — warm palette (not cold gray), row highlights adapted for both themes
+- **Sunset stripe band** — signature gradient at bottom of main content
+- **Default to latest month** on page load
+- **Table defaults to worked days only** with toggle to show all
 
 ## Core Modules
 
@@ -228,117 +314,24 @@ Assigns a status to each attendance record using precedence rules:
 | 9 | timeIn null && timeout null | Missing |
 | 10 | Otherwise | Other |
 
-Late flag: `presentStatus === "Late"` (independent of primary status)
-
-`presentStatus` can be null (HROne sends null for most records).
-
 ### Time Calculator (`src/utils/timeCalculator.ts`)
 
-- `parseHHMM(s)` — "HH:MM" → total minutes (**null-safe**: returns 0 for null/undefined/invalid)
+- `parseHHMM(s)` — "HH:MM" → total minutes (null-safe: returns 0 for invalid)
 - `formatMinutes(m)` — minutes → "Xh Ym"
 - `computeRecordMetrics(record)` — per-day: shift duration, worked minutes, extra/deficit
-- `computeAggregateMetrics(records)` — totals, averages, min/max, late counts (worked days only)
+- `computeAggregateMetrics(records)` — totals, averages, min/max, late counts
 
-### Dashboard Metrics
+### Last Working Day Logic
 
-| Metric | Calculation |
-|--------|-------------|
-| Net Balance (hero) | Overtime - Shortfall. Blue if positive, red if negative |
-| Total Working Hours | Sum of calculatedWorkingHours for all Worked_Days |
-| Overtime | Sum of positive extra/deficit values |
-| Shortfall | Absolute sum of negative extra/deficit values |
-| Average / Day | floor(totalWorkingMinutes / workedDayCount) |
-| Late Arrivals | Count + percentage among worked days |
-| Longest/Shortest Day | Max/min workedMinutes (earliest date on tie, 2+ worked days) |
-
-### Yesterday's Summary
-
-- Searches across ALL saved months (not just active) to find yesterday's record
-- Shows: Time In/Out, Worked, Shift, Extra/Deficit, Late status
-- Color-coded: blue border (positive), red border (negative)
-- Falls back to "No data for YYYY-MM-DD" if not found in any month
-
-## HROne API Integration
-
-### Endpoint
-```
-POST https://app.hrone.cloud/api/timeoffice/attendance/Calendar
-```
-
-### Request Body
-```json
-{
-  "attendanceYear": 2026,
-  "attendanceMonth": 8,
-  "employeeId": 1168,
-  "calendarViewType": "C"
-}
-```
-
-### Key Notes
-- `employeeId` is NOT 0 — each user has their own (e.g., 1168)
-- `JwtTokenCookie` is HttpOnly — cannot be read by JavaScript
-- But `credentials: 'include'` on same-origin (bookmarklet) sends it automatically
-- `domaincode: mapmyindia` header is required
-- Response is a flat JSON array (31 records for a month)
-
-### HROne-Specific Status Codes
-- `"P"` — Present
-- `"WO"` — Week Off (Sat/Sun)
-- `"HO"` — Holiday (Independence Day, etc.)
-- `"FL"` — Full Leave
-- `"EL"` — Earned Leave
-- `"HD"` — Half Day
-- `"-"` — Pending (future/unprocessed days)
-- `null` — presentStatus is often null
-
-## UI Layout
-
-```
-┌──────────────────────────────────────────────────────────────────┐
-│  Header: "Attendance Insights / Satyam Kumar"  [☽] [Sync]       │
-├─────────┬────────────────────────────────────────────────────────┤
-│ HISTORY │                                                        │
-│         │  August 2026  (month heading)                          │
-│ Aug 26  │                                                        │
-│ Jul 26  │  ┌─ Yesterday ─────────────────────────────────────┐  │
-│         │  │ In: 09:43  Out: 18:45  Worked: 9h 2m  +32m     │  │
-│         │  └──────────────────────────────────────────────────┘  │
-│         │                                                        │
-│         │  ┌─ NET BALANCE ────────────────────────────────────┐  │
-│         │  │ +4h 32m                                          │  │
-│         │  │ Overtime: 5h 10m  |  Shortfall: 0h 38m          │  │
-│         │  │ Average/Day: 9h 12m  |  Total: 182h 45m         │  │
-│         │  └──────────────────────────────────────────────────┘  │
-│         │                                                        │
-│         │  ┌─ Metrics Grid (hairline separated) ──────────────┐  │
-│         │  │ Worked: 20  │ Present: 18  │ Late: 3  │ WO: 8   │  │
-│         │  │ Holiday: 2  │ Leave: 1     │ Half: 0  │ Pend: 0 │  │
-│         │  └──────────────────────────────────────────────────┘  │
-│         │                                                        │
-│         │  WORKED DAYS         [Show all days]                   │
-│         │  ┌─ Table ─────────────────────────────────────────┐  │
-│         │  │ Date  Day  Status  In    Out   Worked  +/-  Late│  │
-│         │  │ ...rows with mono time values...                │  │
-│         │  └──────────────────────────────────────────────────┘  │
-│         │                                                        │
-└─────────┴────────────────────────────────────────────────────────┘
-```
-
-## Key UX Features
-
-- **No manual input** — data arrives via extension (auto) or bookmarklet (one click)
-- **Default to latest month** on page load
-- **Yesterday's Summary** searches across all saved months
-- **Table defaults to worked days only** with toggle to show all
-- **Dark/Light theme** toggle persists to localStorage, respects system preference
-- **Employee name** extracted from HROne page and displayed in header
-- **Custom scrollbar** matches the active theme
-- **Sticky header + sidebar** — only main content scrolls
+`findLastWorkingDayRecord()` in App.tsx:
+- Walks backwards from yesterday up to 7 days
+- Skips records with status "Week Off" or "Holiday"
+- Returns the first working day record found
+- Used by both the inline YesterdaySummary and the ProfilePanel
 
 ## Deployment
 
-### Option A: Static file server (simplest, no admin needed)
+### Option A: Static file server
 ```bash
 npm run build
 npx serve dist --listen tcp://0.0.0.0:3333
@@ -355,33 +348,26 @@ server {
 }
 ```
 
-### Option C: Vite preview
-```bash
-npx vite preview --host 0.0.0.0 --port 3333
-```
-
-### Network Access (no admin)
-Serve from Windows directly (not WSL) to avoid NAT. Other machines access via `http://<your-ip>:3333`.
-
 ## Sharing With Colleagues
 
 ### For automatic sync (extension):
 1. Zip the `extension/` folder
 2. They load it in `chrome://extensions/` (Developer mode → Load unpacked)
-3. Done — data flows automatically when they visit HROne calendar
+3. Visit HROne **profile page** once (to capture employee info)
+4. Then visit calendar — data flows automatically
 
 ### For one-click sync (bookmarklet):
-1. They open your deployed app
-2. Drag "Sync Attendance" button to their bookmarks bar
+1. Open the deployed app
+2. Drag "Sync Attendance v3" button to bookmarks bar
 3. On HROne calendar page, click the bookmarklet
 4. First time: enter Employee ID (remembered after that)
-5. Data appears in the app instantly
+5. Profile + attendance data appears in the app
 
 ## Testing Strategy
 
 - **78 tests** across 15 test files
 - **Unit tests**: parser, classifier, timeCalculator
-- **Property-based tests** (fast-check): 14 formal correctness properties, 100+ iterations
+- **Property-based tests** (fast-check): 14 formal correctness properties
 - **Integration tests**: full data flow from JSON to rendered UI
 
 ## Commands
