@@ -11,6 +11,7 @@ import { generateBookmarkletCode } from "./bookmarklet";
 import Dashboard from "./components/Dashboard";
 import DayTable from "./components/DayTable";
 import ProfilePanel from "./components/ProfilePanel";
+import PrivacyPage from "./components/PrivacyPage";
 
 const STORAGE_KEY = "attendance-insights-data";
 const USER_KEY = "attendance-insights-user";
@@ -20,7 +21,7 @@ const BOOKMARKLET_VERSION_KEY = "attendance-bookmarklet-version";
 const EXTENSION_VERSION = "2.0.0";
 const EXTENSION_VERSION_KEY = "attendance-extension-version";
 const APP_VERSION_KEY = "attendance-app-version";
-const APP_VERSION = "1.3.0"; // Bump this on each release
+const APP_VERSION = "1.3.1"; // Bump this on each release
 interface SavedEntry { label: string; key: string; records: AttendanceRecord[]; }
 
 function deriveMonthKey(records: AttendanceRecord[]): string {
@@ -131,7 +132,13 @@ function YesterdaySummary({ records, allEntries }: { records: EnrichedRecord[]; 
           <Stat label="Late" value={rec.isLateArrival ? "Yes" : "No"} color={rec.isLateArrival ? "text-warning" : undefined} />
         </div>
       ) : (
-        <p className="text-sm text-charcoal">{rec.status} — not a working day</p>
+        <p className="text-sm text-charcoal">
+          {rec.status === "Absent"
+            ? "Absent — no attendance recorded"
+            : rec.status === "Flexi Leave" || rec.status === "Earned Leave" || rec.status === "Leave"
+            ? `${rec.status} — on leave`
+            : `${rec.status} — not a working day`}
+        </p>
       )}
     </div>
   );
@@ -164,6 +171,7 @@ function App() {
   const [todayAttendance, setTodayAttendance] = useState<TodayAttendance | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [hasUpdate, setHasUpdate] = useState(false);
+  const [showPrivacy, setShowPrivacy] = useState(false);
   const [employeeProfile, setEmployeeProfile] = useState<EmployeeProfile | null>(() => {
     try { const raw = localStorage.getItem(PROFILE_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; }
   });
@@ -262,11 +270,11 @@ function App() {
           const firstTime = new Date(firstPunch);
           const lastTime = new Date(lastPunch);
           const now = new Date();
-          // If only one punch, calculate from first to now
-          const isStillIn = punches.length % 2 !== 0; // odd punches = still in
-          const endTime = isStillIn ? now : lastTime;
-          const workedMs = endTime.getTime() - firstTime.getTime();
+          // Worked so far = from first punch to now (regardless of how many punches)
+          const workedMs = now.getTime() - firstTime.getTime();
           const workedMinutesSoFar = Math.max(0, Math.floor(workedMs / 60000));
+          // Still in if odd number of punches
+          const isStillIn = punches.length % 2 !== 0;
 
           setTodayAttendance({
             date: firstPunch.split("T")[0],
@@ -532,10 +540,19 @@ function App() {
               Last synced: {new Date(lastSynced).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
             </p>
           )}
+          <button
+            onClick={() => setShowPrivacy(true)}
+            className="px-5 mt-3 text-[11px] text-steel hover:text-ink transition-colors"
+          >
+            Privacy & Data Safety
+          </button>
         </aside>
 
         {/* Main */}
         <main className="flex-1 overflow-y-auto">
+          {showPrivacy ? (
+            <PrivacyPage onBack={() => setShowPrivacy(false)} />
+          ) : (
           <div className="px-8 py-8 space-y-8 max-w-[1280px]">
             {(!attendanceData || showOnboarding) ? (
               <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -643,6 +660,7 @@ function App() {
               </>
             )}
           </div>
+          )}
         </main>
 
         {/* Right Profile Panel — only visible after first sync */}

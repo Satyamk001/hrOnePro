@@ -52,13 +52,13 @@ export function classifyRecord(record: AttendanceRecord): ClassifiedRecord {
     return { ...record, status: "Half Day", isLateArrival };
   }
 
-  // 6. Either half "FL", neither "P" → "Full Leave"
+  // 6. Either half "FL", neither "P" → "Flexi Leave"
   if (
     (firstHalf === "FL" || secondHalf === "FL") &&
     firstHalf !== "P" &&
     secondHalf !== "P"
   ) {
-    return { ...record, status: "Full Leave", isLateArrival };
+    return { ...record, status: "Flexi Leave", isLateArrival };
   }
 
   // 7. Either half "EL", neither "P" → "Earned Leave"
@@ -73,6 +73,11 @@ export function classifyRecord(record: AttendanceRecord): ClassifiedRecord {
   // 8. Both halves "-" → "Pending" (future/unprocessed days)
   if (firstHalf === "-" && secondHalf === "-") {
     return { ...record, status: "Pending", isLateArrival };
+  }
+
+  // 8b. Either half "A" (Absent) → "Absent"
+  if (firstHalf === "A" || secondHalf === "A") {
+    return { ...record, status: "Absent", isLateArrival };
   }
 
   // 9. timeIn === null && timeout === null → "Missing"

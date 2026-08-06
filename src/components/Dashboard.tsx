@@ -58,7 +58,7 @@ export default function Dashboard({ metrics }: DashboardProps) {
         <Cell label="Late" value={`${metrics.lateCount}`} sub={`${metrics.latePercentage.toFixed(1)}% of worked days`} />
         <Cell label="Week Off" value={String(metrics.statusCounts["Week Off"])} />
         <Cell label="Holiday" value={String(metrics.statusCounts["Holiday"])} />
-        <Cell label="Leave" value={String(metrics.statusCounts["Leave"] + metrics.statusCounts["Full Leave"] + metrics.statusCounts["Earned Leave"])} />
+        <Cell label="Leave" value={String(metrics.statusCounts["Leave"] + metrics.statusCounts["Flexi Leave"] + metrics.statusCounts["Earned Leave"])} />
         <Cell label="Half Day" value={String(metrics.statusCounts["Half Day"])} />
         <Cell
           label="Pending"

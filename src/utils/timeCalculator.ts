@@ -78,9 +78,10 @@ export function computeAggregateMetrics(
     "Week Off": 0,
     Leave: 0,
     "Half Day": 0,
-    "Full Leave": 0,
+    "Flexi Leave": 0,
     "Earned Leave": 0,
     Holiday: 0,
+    Absent: 0,
     Pending: 0,
     Missing: 0,
     Other: 0,
@@ -106,8 +107,10 @@ export function computeAggregateMetrics(
   }
 
   // Average work minutes (floor division, 0 if no worked days)
+  // Exclude days with 0 worked minutes from average (unprocessed days)
+  const daysWithHours = workedDays.filter((d) => d.workedMinutes > 0);
   const averageWorkMinutes =
-    workedDayCount > 0 ? Math.floor(totalWorkingMinutes / workedDayCount) : 0;
+    daysWithHours.length > 0 ? Math.floor(totalWorkingMinutes / daysWithHours.length) : 0;
 
   // Late count: records where isLateArrival is true (among worked days)
   const lateCount = workedDays.filter((r) => r.isLateArrival).length;

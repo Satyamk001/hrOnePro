@@ -89,6 +89,19 @@ export default function ProfilePanel({ profile, yesterdayRecord, todayAttendance
                   {todayAttendance.isStillIn ? "In Office" : "Left"}
                 </span>
               </div>
+              <div className="flex justify-between pt-1 border-t border-hairline">
+                <span className="text-xs text-steel">Can leave at</span>
+                <span className="text-xs font-mono font-medium text-primary">
+                  {(() => {
+                    // First punch + 9 hours = earliest leave time
+                    const [h, m] = todayAttendance.firstPunch.split(":").map(Number);
+                    const leaveMinutes = h * 60 + m + 540; // 540 = 9 hours
+                    const leaveH = Math.floor(leaveMinutes / 60);
+                    const leaveM = leaveMinutes % 60;
+                    return `${String(leaveH).padStart(2, "0")}:${String(leaveM).padStart(2, "0")}`;
+                  })()}
+                </span>
+              </div>
             </div>
           </div>
         ) : yesterdayRecord ? (

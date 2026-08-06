@@ -1,7 +1,7 @@
 // Feature: attendance-insights, Property 13: Average work duration correctness
 import { describe, it, expect } from 'vitest';
 import * as fc from 'fast-check';
-import { computeAggregateMetrics, parseHHMM } from './timeCalculator';
+import { computeAggregateMetrics, computeRecordMetrics, parseHHMM } from './timeCalculator';
 import type { ClassifiedRecord } from '../types';
 
 /**
@@ -130,7 +130,7 @@ const arbRecordsWithAtLeastOneWorkedDay = fc
   .map(([worked, nonWorked]) => [...worked, ...nonWorked]);
 
 describe('Property 13: Average work duration correctness', () => {
-  it('averageWorkMinutes equals floor(totalWorkingMinutes / workedDayCount)', () => {
+  it('averageWorkMinutes equals floor(totalWorkingMinutes / daysWithNonZeroHours)', () => {
     fc.assert(
       fc.property(arbRecordsWithAtLeastOneWorkedDay, (records) => {
         const result = computeAggregateMetrics(records);
@@ -139,7 +139,6 @@ describe('Property 13: Average work duration correctness', () => {
         const workedDays = records.filter(
           (r) => r.status === 'Present' || r.status === 'Half Day'
         );
-        const workedDayCount = workedDays.length;
 
         // Independently compute total working minutes
         const totalWorkingMinutes = workedDays.reduce(
@@ -147,8 +146,14 @@ describe('Property 13: Average work duration correctness', () => {
           0
         );
 
-        // Expected average is floor division
-        const expectedAverage = Math.floor(totalWorkingMinutes / workedDayCount);
+        // Days with non-zero hours (excludes unprocessed days)
+        const enriched = workedDays.map(computeRecordMetrics);
+        const daysWithHours = enriched.filter((d) => d.workedMinutes > 0);
+
+        // Expected average: divide by days that have hours, or 0 if none
+        const expectedAverage = daysWithHours.length > 0
+          ? Math.floor(totalWorkingMinutes / daysWithHours.length)
+          : 0;
 
         expect(result.averageWorkMinutes).toBe(expectedAverage);
       }),

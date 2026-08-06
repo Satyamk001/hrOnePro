@@ -29,9 +29,10 @@ export type DayStatus =
   | "Week Off"
   | "Leave"
   | "Half Day"
-  | "Full Leave"
+  | "Flexi Leave"
   | "Earned Leave"
   | "Holiday"
+  | "Absent"
   | "Pending"
   | "Missing"
   | "Other";
