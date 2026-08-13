@@ -153,6 +153,52 @@ function Stat({ label, value, mono, color }: { label: string; value: string; mon
   );
 }
 
+function LiveClock({ todayAttendance }: { todayAttendance: TodayAttendance | null }) {
+  const [now, setNow] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const timeStr = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+
+  // Calculate time left if we have today's punch data
+  let timeLeftDisplay: string | null = null;
+  let shiftComplete = false;
+
+  if (todayAttendance && todayAttendance.firstPunch) {
+    const [h, m] = todayAttendance.firstPunch.split(":").map(Number);
+    const leaveMinutes = h * 60 + m + 540; // first punch + 9 hours
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    const diff = leaveMinutes - nowMinutes;
+
+    if (diff <= 0) {
+      const extra = Math.abs(diff);
+      const extraH = Math.floor(extra / 60);
+      const extraM = extra % 60;
+      shiftComplete = true;
+      timeLeftDisplay = `+${extraH}h ${extraM}m extra`;
+    } else {
+      const hoursLeft = Math.floor(diff / 60);
+      const minsLeft = diff % 60;
+      timeLeftDisplay = `${hoursLeft}h ${minsLeft}m left`;
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-3">
+      <span className="font-mono text-sm text-ink tabular-nums">{timeStr}</span>
+      {shiftComplete && timeLeftDisplay && (
+        <span className="text-xs font-medium text-success">{timeLeftDisplay}</span>
+      )}
+      {!shiftComplete && timeLeftDisplay && (
+        <span className="text-xs font-medium text-primary">{timeLeftDisplay}</span>
+      )}
+    </div>
+  );
+}
+
 function App() {
   const [savedEntries, setSavedEntries] = useState<SavedEntry[]>(loadSavedEntries);
   const [activeKey, setActiveKey] = useState<string | null>(() => {
@@ -165,7 +211,6 @@ function App() {
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains("dark"));
   const [toast, setToast] = useState<string | null>(null);
   const [lastSynced, setLastSynced] = useState<string | null>(() => localStorage.getItem("attendance-last-synced"));
-  const [bookmarkletOutdated, setBookmarkletOutdated] = useState(false);
   const [extensionAvailable, setExtensionAvailable] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [todayAttendance, setTodayAttendance] = useState<TodayAttendance | null>(null);
@@ -372,13 +417,9 @@ function App() {
           setEmployeeProfile(event.data.profile);
           localStorage.setItem(PROFILE_KEY, JSON.stringify(event.data.profile));
         }
-        const incomingVersion = event.data.v;
-        if (!incomingVersion || incomingVersion !== BOOKMARKLET_VERSION) {
-          setBookmarkletOutdated(true);
-          localStorage.setItem(BOOKMARKLET_VERSION_KEY, incomingVersion || "0");
-        } else {
-          setBookmarkletOutdated(false);
-          localStorage.setItem(BOOKMARKLET_VERSION_KEY, incomingVersion);
+        // Track bookmarklet version
+        if (event.data.v) {
+          localStorage.setItem(BOOKMARKLET_VERSION_KEY, event.data.v);
         }
       }
     };
@@ -416,6 +457,11 @@ function App() {
             <span className="font-display text-lg font-medium text-ink tracking-display">Attendance Insights</span>
             {userName && <span className="text-sm text-steel">/ {userName}</span>}
           </div>
+          <div className="flex items-center gap-4">
+            {/* Live clock + time left */}
+            <LiveClock todayAttendance={todayAttendance} />
+            <div className="w-px h-6 bg-hairline" />
+          </div>
           <div className="flex items-center gap-3">
             <button
               onClick={() => setShowOnboarding(!showOnboarding)}
@@ -451,59 +497,31 @@ function App() {
                 </svg>
               )}
             </button>
-            <a
-              ref={bookmarkletRef}
-              href="#"
-              className="px-4 h-9 inline-flex items-center gap-2 bg-primary text-white rounded-md text-sm font-medium hover:bg-primary-deep transition-colors cursor-grab active:cursor-grabbing"
-              onClick={(e) => { e.preventDefault(); alert("Drag this button to your bookmarks bar.\nThen click it on the HROne calendar page."); }}
+            <button
+              onClick={handleSyncNow}
+              disabled={syncing || !extensionAvailable}
+              title={extensionAvailable ? "Fetch latest data from HROne" : "Install the extension to use Sync"}
+              className="px-4 h-9 inline-flex items-center gap-2 bg-primary text-white rounded-md text-sm font-medium hover:bg-primary-deep transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Sync Attendance
-              <span className="text-[10px] opacity-70 font-mono">v{BOOKMARKLET_VERSION}</span>
-            </a>
-            {extensionAvailable && (
-              <button
-                onClick={handleSyncNow}
-                disabled={syncing}
-                className="px-4 h-9 inline-flex items-center gap-2 border border-hairline-strong bg-canvas text-ink rounded-md text-sm font-medium hover:bg-hairline-soft transition-colors disabled:opacity-50"
-              >
-                {syncing ? (
-                  <>
-                    <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
-                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4 31.4" strokeLinecap="round" />
-                    </svg>
-                    Syncing…
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
-                    </svg>
-                    Sync Now
-                  </>
-                )}
-              </button>
-            )}
+              {syncing ? (
+                <>
+                  <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4 31.4" strokeLinecap="round" />
+                  </svg>
+                  Syncing…
+                </>
+              ) : (
+                <>
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                  </svg>
+                  Sync
+                </>
+              )}
+            </button>
           </div>
         </div>
       </header>
-
-      {/* Bookmarklet update banner */}
-      {bookmarkletOutdated && (
-        <div className="bg-cream border-b border-beige-deep px-6 py-2.5 flex items-center justify-between shrink-0">
-          <p className="text-xs text-charcoal">
-            Your bookmarklet is outdated. Drag the new <strong className="text-ink">Sync Attendance v{BOOKMARKLET_VERSION}</strong> button to update.
-          </p>
-          <button
-            onClick={() => setBookmarkletOutdated(false)}
-            className="text-steel hover:text-ink ml-4 shrink-0 transition-colors"
-            aria-label="Dismiss"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-      )}
 
       <div className="flex flex-1 overflow-hidden">
         {/* Toast notification */}
@@ -546,6 +564,7 @@ function App() {
           >
             Privacy & Data Safety
           </button>
+          <p className="px-5 mt-2 text-[10px] text-stone font-mono">v{APP_VERSION}</p>
         </aside>
 
         {/* Main */}
@@ -586,8 +605,16 @@ function App() {
                     <div className="flex gap-3">
                       <span className="shrink-0 w-7 h-7 rounded-full bg-primary text-white flex items-center justify-center text-xs font-semibold">1</span>
                       <div>
-                        <p className="text-sm font-medium text-ink">Drag the button above to your bookmarks bar</p>
-                        <p className="text-xs text-steel mt-0.5">Look for "Sync Attendance" in the top-right corner</p>
+                        <p className="text-sm font-medium text-ink">Drag this button to your bookmarks bar:</p>
+                        <a
+                          ref={bookmarkletRef}
+                          href="#"
+                          className="mt-2 px-4 py-2 inline-flex items-center gap-2 bg-primary text-white rounded-md text-sm font-medium cursor-grab active:cursor-grabbing"
+                          onClick={(e) => { e.preventDefault(); alert("Drag this button to your bookmarks bar.\nThen click it on the HROne calendar page."); }}
+                        >
+                          Sync Attendance
+                          <span className="text-[10px] opacity-70 font-mono">v{BOOKMARKLET_VERSION}</span>
+                        </a>
                       </div>
                     </div>
                     <div className="flex gap-3">

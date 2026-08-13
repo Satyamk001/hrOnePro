@@ -123,3 +123,8 @@ body {
 .sunset-stripe {
   background: linear-gradient(90deg, var(--color-primary) 0%, var(--color-sunshine-700) 25%, var(--color-sunshine-500) 50%, var(--color-yellow-saturated) 75%, var(--color-cream) 100%);
 }
+
+::selection {
+  background: orange;
+  color: white;
+}

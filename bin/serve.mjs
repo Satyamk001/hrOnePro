@@ -70,6 +70,17 @@ const server = createServer((req, res) => {
   }
 });
 
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    port++;
+    console.log(`  Port ${port - 1} is in use, trying ${port}...`);
+    server.listen(port, '0.0.0.0');
+  } else {
+    console.error('Server error:', err.message);
+    process.exit(1);
+  }
+});
+
 server.listen(port, '0.0.0.0', () => {
   const localUrl = `http://localhost:${port}`;
   console.log('');

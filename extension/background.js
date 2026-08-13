@@ -21,8 +21,8 @@ function isAppTab(tab) {
   if (!tab.url) return false;
   // Match localhost or 127.0.0.1
   if (APP_URL_PATTERNS.some((pattern) => tab.url.startsWith(pattern))) return true;
-  // Match any http tab with "Attendance Insights" in title (for deployed versions)
-  if (tab.url.startsWith("http://") && tab.title && tab.title.includes("Attendance Insights")) return true;
+  // Match any http/https tab with "Attendance Insights" in title (for deployed versions)
+  if ((tab.url.startsWith("http://") || tab.url.startsWith("https://")) && tab.title && tab.title.includes("Attendance Insights")) return true;
   return false;
 }
 
