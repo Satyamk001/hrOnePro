@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
 import type { EmployeeProfile, EnrichedRecord, TodayAttendance } from "../types";
 import { formatMinutes, parseHHMM } from "../utils/timeCalculator";
+import { BlurReveal } from "./ui/BlurReveal";
+import AnimatedCounter from "./ui/AnimatedCounter";
+import { GlowCard } from "./ui/GlowCard";
 
 interface ProfilePanelProps {
   profile: EmployeeProfile;
@@ -17,10 +20,10 @@ export default function ProfilePanel({ profile, yesterdayRecord, todayAttendance
     .toUpperCase();
 
   return (
-    <aside className="w-64 shrink-0 border-l border-hairline bg-surface overflow-y-auto">
+    <aside className="w-64 shrink-0 shadow-[-1px_0_8px_-2px_rgba(0,0,0,0.06)] bg-surface overflow-y-auto">
       <div className="sticky top-0 p-5 space-y-6">
         {/* Employee Card */}
-        <div className="rounded-lg bg-cream border border-beige-deep p-5 text-center">
+        <GlowCard className="rounded-lg bg-cream border border-beige-deep p-5 text-center">
           {/* Avatar */}
           <div className="mx-auto w-16 h-16 rounded-full bg-primary flex items-center justify-center mb-3">
             {profile.profileImageUrl ? (
@@ -34,9 +37,10 @@ export default function ProfilePanel({ profile, yesterdayRecord, todayAttendance
             )}
           </div>
 
-          <h3 className="font-display text-lg font-medium text-ink tracking-heading">
-            {profile.employeeName}
-          </h3>
+          <BlurReveal
+            text={profile.employeeName}
+            className="font-display text-lg font-medium text-ink tracking-heading justify-center"
+          />
           <p className="text-xs text-steel mt-0.5">{profile.employeeCode}</p>
 
           {profile.designation && (
@@ -45,7 +49,7 @@ export default function ProfilePanel({ profile, yesterdayRecord, todayAttendance
           {profile.department && (
             <p className="text-xs text-steel">{profile.department}</p>
           )}
-        </div>
+        </GlowCard>
 
         {/* Profile Details */}
         <div className="space-y-3">
@@ -153,9 +157,15 @@ function TodayAttendanceLive({ todayAttendance }: { todayAttendance: TodayAttend
         <span className="text-xs text-steel">Last Punch</span>
         <span className="text-xs font-mono text-ink">{todayAttendance.lastPunch}</span>
       </div>
-      <div className="flex justify-between">
+      <div className="flex justify-between items-center">
         <span className="text-xs text-steel">Worked So Far</span>
-        <span className="text-xs font-mono font-medium text-ink">{formatMinutes(workedSoFar)}</span>
+        <AnimatedCounter
+          value={workedSoFar}
+          duration={2}
+          separator={false}
+          className="text-xs font-mono font-medium text-ink"
+          suffix=" min"
+        />
       </div>
       <div className="flex justify-between">
         <span className="text-xs text-steel">Punches</span>

@@ -12,6 +12,10 @@ import Dashboard from "./components/Dashboard";
 import DayTable from "./components/DayTable";
 import ProfilePanel from "./components/ProfilePanel";
 import PrivacyPage from "./components/PrivacyPage";
+import { GlassToggle } from "./components/ui/GlassToggle";
+import { SplashButton } from "./components/ui/SplashButton";
+import { ClickRipple } from "./components/ui/ClickRipple";
+import AnimatedCounter from "./components/ui/AnimatedCounter";
 
 const STORAGE_KEY = "attendance-insights-data";
 const USER_KEY = "attendance-insights-user";
@@ -153,6 +157,17 @@ function Stat({ label, value, mono, color }: { label: string; value: string; mon
   );
 }
 
+function PaddedCounter({ value, ...props }: { value: number; duration: number; continuous: boolean; separator: boolean; className?: string }) {
+  const tens = Math.floor(value / 10);
+  const units = value % 10;
+  return (
+    <>
+      <AnimatedCounter value={tens} duration={props.duration} continuous={props.continuous} separator={props.separator} className={props.className} />
+      <AnimatedCounter value={units} duration={props.duration} continuous={props.continuous} separator={props.separator} className={props.className} />
+    </>
+  );
+}
+
 function LiveClock({ todayAttendance }: { todayAttendance: TodayAttendance | null }) {
   const [now, setNow] = useState(new Date());
 
@@ -161,7 +176,9 @@ function LiveClock({ todayAttendance }: { todayAttendance: TodayAttendance | nul
     return () => clearInterval(timer);
   }, []);
 
-  const timeStr = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+  const hours = now.getHours();
+  const minutes = now.getMinutes();
+  const seconds = now.getSeconds();
 
   // Calculate time left if we have today's punch data
   let timeLeftDisplay: string | null = null;
@@ -187,15 +204,27 @@ function LiveClock({ todayAttendance }: { todayAttendance: TodayAttendance | nul
   }
 
   return (
-    <div className="flex items-center gap-3">
-      <span className="font-mono text-sm text-ink tabular-nums">{timeStr}</span>
-      {shiftComplete && timeLeftDisplay && (
-        <span className="text-xs font-medium text-success">{timeLeftDisplay}</span>
+    <>
+      {/* Clock icon */}
+      <svg className="w-3.5 h-3.5 text-steel shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+      <span className="font-mono text-sm font-semibold text-ink tabular-nums inline-flex items-center">
+        <PaddedCounter value={hours} duration={0.3} continuous separator={false} className="text-sm font-mono text-ink" />
+        <span className="text-steel">:</span>
+        <PaddedCounter value={minutes} duration={0.3} continuous separator={false} className="text-sm font-mono text-ink" />
+        <span className="text-steel">:</span>
+        <PaddedCounter value={seconds} duration={0.3} continuous separator={false} className="text-sm font-mono text-ink" />
+      </span>
+      {timeLeftDisplay && (
+        <>
+          <div className="w-px h-4 bg-hairline" />
+          <span className={`text-xs font-medium ${shiftComplete ? "text-success" : "text-primary"}`}>
+            {timeLeftDisplay}
+          </span>
+        </>
       )}
-      {!shiftComplete && timeLeftDisplay && (
-        <span className="text-xs font-medium text-primary">{timeLeftDisplay}</span>
-      )}
-    </div>
+    </>
   );
 }
 
@@ -242,6 +271,14 @@ function App() {
 
   const bookmarkletRef = useRef<HTMLAnchorElement>(null);
   useEffect(() => { if (bookmarkletRef.current) bookmarkletRef.current.setAttribute("href", bookmarkletCode); }, [bookmarkletCode]);
+
+  // Center-focus the active history item when selection changes
+  const activeItemRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (activeItemRef.current) {
+      activeItemRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [activeKey]);
 
   const attendanceData = useMemo(() => {
     if (!activeKey) return null;
@@ -449,126 +486,203 @@ function App() {
   }, [enrichedRecords, savedEntries]);
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-canvas">
-      {/* Nav */}
-      <header className="bg-canvas border-b border-hairline-soft shrink-0">
-        <div className="px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="font-display text-lg font-medium text-ink tracking-display">Attendance Insights</span>
-            {userName && <span className="text-sm text-steel">/ {userName}</span>}
+    <div className="h-screen flex flex-col overflow-hidden bg-canvas relative">
+      {/* Glassmorphism Three-Pill Navigation */}
+      <header className="absolute top-0 left-0 right-0 z-30 pointer-events-none">
+        <div className="px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between gap-3 sm:gap-5 lg:gap-8 pointer-events-auto">
+
+          {/* Pill 1 — Brand / User (Left) */}
+          <div className="glass-pill flex items-center gap-2.5 px-4 sm:px-5 py-2.5 min-w-0">
+            <span className="font-display text-base sm:text-lg font-semibold text-ink tracking-display truncate">
+              Attendance Insights
+            </span>
+            {userName && (
+              <span className="text-xs sm:text-sm text-steel font-normal truncate">
+                / {userName}
+              </span>
+            )}
           </div>
-          <div className="flex items-center gap-4">
-            {/* Live clock + time left */}
+
+          {/* Pill 2 — Time / Status (Center) */}
+          <div className="glass-pill flex items-center gap-2.5 px-4 py-2.5 shrink-0">
             <LiveClock todayAttendance={todayAttendance} />
-            <div className="w-px h-6 bg-hairline" />
           </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setShowOnboarding(!showOnboarding)}
-              className={`w-8 h-8 inline-flex items-center justify-center rounded-md border border-hairline-strong bg-canvas text-charcoal hover:bg-hairline-soft transition-colors relative ${showOnboarding ? "text-primary" : ""}`}
-              aria-label="Setup & Downloads"
-              title="Setup & Downloads"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" />
-              </svg>
-              {hasUpdate && (
-                <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-primary rounded-full" />
-              )}
-            </button>
-            <button
-              onClick={() => {
+
+          {/* Pill 3 — Actions (Right) */}
+          <div className="glass-pill flex items-center gap-2 px-3 py-2.5 shrink-0">
+            {/* Help button */}
+            <ClickRipple>
+              <button
+                onClick={() => setShowOnboarding(!showOnboarding)}
+                className={`w-8 h-8 inline-flex items-center justify-center rounded-lg text-charcoal hover:text-ink hover:bg-hairline-soft/50 transition-all duration-200 relative ${showOnboarding ? "text-primary" : ""}`}
+                aria-label="Setup & Downloads"
+                title="Setup & Downloads"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" />
+                </svg>
+                {hasUpdate && (
+                  <span className="absolute top-1 right-1 w-2 h-2 bg-primary rounded-full" />
+                )}
+              </button>
+            </ClickRipple>
+
+            {/* Divider */}
+            <div className="w-px h-5 bg-hairline" />
+
+            {/* Theme toggle */}
+            <GlassToggle
+              isDark={isDark}
+              width={56}
+              height={28}
+              orbSize={24}
+              onToggle={() => {
                 const html = document.documentElement;
                 const newDark = !isDark;
                 if (newDark) { html.classList.add("dark"); } else { html.classList.remove("dark"); }
                 localStorage.setItem("theme", newDark ? "dark" : "light");
                 setIsDark(newDark);
               }}
-              className="w-8 h-8 inline-flex items-center justify-center rounded-md border border-hairline-strong bg-canvas text-charcoal hover:bg-hairline-soft transition-colors"
-              aria-label="Toggle theme"
-            >
-              {isDark ? (
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
-                </svg>
-              ) : (
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" />
-                </svg>
-              )}
-            </button>
-            <button
+            />
+
+            {/* Divider */}
+            <div className="w-px h-5 bg-hairline" />
+
+            {/* Sync button */}
+            <SplashButton
               onClick={handleSyncNow}
               disabled={syncing || !extensionAvailable}
               title={extensionAvailable ? "Fetch latest data from HROne" : "Install the extension to use Sync"}
-              className="px-4 h-9 inline-flex items-center gap-2 bg-primary text-white rounded-md text-sm font-medium hover:bg-primary-deep transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {syncing ? (
-                <>
-                  <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
-                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4 31.4" strokeLinecap="round" />
-                  </svg>
-                  Syncing…
-                </>
-              ) : (
-                <>
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
-                  </svg>
-                  Sync
-                </>
-              )}
-            </button>
+              text={syncing ? "Syncing…" : "Sync"}
+              width={100}
+              height={34}
+              fontSize={13}
+            />
           </div>
+
         </div>
       </header>
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden pt-14">
         {/* Toast notification */}
         {toast && (
-          <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 bg-[#1c1917] text-white text-xs font-medium rounded-md shadow-card animate-[fadeIn_0.2s_ease-out]">
+          <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 bg-ink text-canvas text-xs font-medium rounded-full shadow-card animate-[fadeIn_0.2s_ease-out]">
             {toast}
           </div>
         )}
 
-        {/* Sidebar */}
-        <aside className="w-52 bg-surface border-r border-hairline py-6 shrink-0 overflow-y-auto">
-          <p className="px-5 text-[11px] font-semibold uppercase tracking-[1px] text-steel mb-3">History</p>
-          {savedEntries.length === 0 ? (
-            <p className="px-5 text-sm text-stone">No data yet</p>
-          ) : (
-            <nav className="px-3 space-y-0.5">
-              {savedEntries.slice().sort((a, b) => b.key.localeCompare(a.key)).map((entry) => (
-                <button
-                  key={entry.key}
-                  onClick={() => setActiveKey(entry.key)}
-                  className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
-                    activeKey === entry.key
-                      ? "bg-cream text-ink font-medium border border-beige-deep"
-                      : "text-charcoal hover:text-ink hover:bg-hairline-soft"
-                  }`}
-                >
-                  {entry.label}
-                </button>
-              ))}
-            </nav>
-          )}
-          {lastSynced && (
-            <p className="px-5 mt-5 pt-4 border-t border-hairline text-[11px] text-stone">
-              Last synced: {new Date(lastSynced).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
-            </p>
-          )}
-          <button
-            onClick={() => setShowPrivacy(true)}
-            className="px-5 mt-3 text-[11px] text-steel hover:text-ink transition-colors"
-          >
-            Privacy & Data Safety
-          </button>
-          <p className="px-5 mt-2 text-[10px] text-stone font-mono">v{APP_VERSION}</p>
+        {/* Sidebar — Cinematic episode selector */}
+        <aside className="w-56 bg-surface shrink-0 flex flex-col overflow-hidden">
+          {/* Header */}
+          <div className="sticky top-0 z-10 flex flex-col gap-y-2 px-4 py-4 bg-surface/80 backdrop-blur-xl border-b border-hairline">
+            <h1 className="text-[14px] font-bold text-ink">History</h1>
+          </div>
+          {/* Scrollable list */}
+          <div className="flex-1 min-h-0 overflow-hidden">
+            {savedEntries.length === 0 ? (
+              <p className="px-5 py-8 text-sm text-slate text-center">No data yet</p>
+            ) : (
+              <div
+                className="w-full h-full overflow-y-scroll overflow-x-hidden scrollbar-hidden flex flex-col items-center"
+                style={{ paddingTop: '40%', paddingBottom: '40%', overscrollBehavior: 'contain' }}
+              >
+                <div className="flex flex-col items-center w-full gap-y-2">
+                  {savedEntries.slice().sort((a, b) => b.key.localeCompare(a.key)).map((entry, index) => {
+                    const isActive = activeKey === entry.key;
+                    const sortedEntries = savedEntries.slice().sort((a, b) => b.key.localeCompare(a.key));
+                    const activeIndex = sortedEntries.findIndex(e => e.key === activeKey);
+                    const distance = Math.abs(index - activeIndex);
+
+                    // Distance-based scale + opacity (matching the reference pattern)
+                    let scale = 1.05;
+                    let opacity = 1;
+                    let zIndex = 100;
+
+                    if (!isActive) {
+                      if (distance === 1) { scale = 0.95; opacity = 0.6; zIndex = 49; }
+                      else if (distance === 2) { scale = 0.88; opacity = 0.35; zIndex = 48; }
+                      else if (distance === 3) { scale = 0.82; opacity = 0.2; zIndex = 47; }
+                      else { scale = 0.78; opacity = 0.1; zIndex = Math.max(20, 46 - distance); }
+                    }
+
+                    return (
+                      <button
+                        key={entry.key}
+                        ref={isActive ? activeItemRef : undefined}
+                        onClick={() => setActiveKey(entry.key)}
+                        className="cursor-pointer transition-all duration-300 ease-out will-change-transform"
+                        style={{
+                          zIndex,
+                          transform: `scale(${scale})`,
+                          transformOrigin: 'center center',
+                          opacity,
+                          width: '72%',
+                          maxWidth: '200px',
+                        }}
+                      >
+                        <div className={`relative rounded-lg overflow-hidden border transition-colors duration-300 w-full ${
+                          isActive
+                            ? "border-primary shadow-lg shadow-primary/20"
+                            : "border-hairline hover:border-hairline-strong"
+                        }`}>
+                          <div className={`px-3 py-2 flex items-start gap-x-2.5 w-full min-w-0 ${
+                            isActive ? "bg-primary/20" : "bg-canvas/50"
+                          }`}>
+                            {/* Number badge */}
+                            <div className={`flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center font-bold text-[12px] mt-0.5 ${
+                              isActive
+                                ? "bg-primary text-white"
+                                : "bg-hairline-soft text-steel"
+                            }`}>
+                              {index + 1}
+                            </div>
+                            {/* Title + date */}
+                            <div className="flex-1 min-w-0 overflow-hidden">
+                              <h4 className={`text-[12px] font-semibold leading-snug transition-all duration-300 ${
+                                isActive
+                                  ? "whitespace-normal break-words text-ink"
+                                  : "truncate text-slate"
+                              }`}>
+                                {entry.label}
+                              </h4>
+                              <p className="text-[10px] text-stone mt-0.5 truncate">
+                                {entry.key}
+                              </p>
+                            </div>
+                          </div>
+                          {/* Progress bar — only on active */}
+                          {isActive && (
+                            <div className="h-[3px] w-full bg-hairline">
+                              <div className="h-full bg-primary" style={{ width: '100%' }} />
+                            </div>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+          {/* Footer */}
+          <div className="shrink-0 px-4 py-3 border-t border-hairline">
+            {lastSynced && (
+              <p className="text-[10px] text-stone mb-1">
+                Last synced: {new Date(lastSynced).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+              </p>
+            )}
+            <button
+              onClick={() => setShowPrivacy(true)}
+              className="text-[10px] text-steel hover:text-slate transition-colors"
+            >
+              Privacy & Data Safety
+            </button>
+            <p className="mt-0.5 text-[9px] text-muted font-mono">v{APP_VERSION}</p>
+          </div>
         </aside>
 
         {/* Main */}
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto scrollbar-hidden">
           {showPrivacy ? (
             <PrivacyPage onBack={() => setShowPrivacy(false)} />
           ) : (

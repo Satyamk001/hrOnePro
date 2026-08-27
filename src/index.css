@@ -128,3 +128,96 @@ body {
   background: orange;
   color: white;
 }
+
+/* Glassmorphism Pill — shared topbar pill styling */
+.glass-pill {
+  background: color-mix(in srgb, var(--color-canvas), transparent 30%);
+  backdrop-filter: blur(20px) saturate(1.2);
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
+  border: 1px solid color-mix(in srgb, var(--color-hairline), transparent 50%);
+  border-top-color: color-mix(in srgb, white, transparent 70%);
+  border-radius: 9999px;
+  box-shadow:
+    0 1px 2px 0 rgba(0, 0, 0, 0.03),
+    0 4px 16px -4px rgba(0, 0, 0, 0.06),
+    inset 0 1px 0 0 color-mix(in srgb, white, transparent 80%),
+    inset 0 -1px 0 0 rgba(0, 0, 0, 0.02);
+  transition: box-shadow 250ms cubic-bezier(0.16, 1, 0.3, 1), border-color 250ms ease;
+}
+
+.glass-pill:hover {
+  box-shadow:
+    0 2px 4px 0 rgba(0, 0, 0, 0.04),
+    0 8px 24px -6px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 0 color-mix(in srgb, white, transparent 65%),
+    inset 0 -1px 0 0 rgba(0, 0, 0, 0.02);
+  border-color: color-mix(in srgb, var(--color-hairline), transparent 30%);
+  border-top-color: color-mix(in srgb, white, transparent 55%);
+}
+
+.dark .glass-pill {
+  background: color-mix(in srgb, var(--color-surface), transparent 40%);
+  border-color: color-mix(in srgb, var(--color-hairline), transparent 60%);
+  border-top-color: color-mix(in srgb, white, transparent 88%);
+  box-shadow:
+    0 1px 2px 0 rgba(0, 0, 0, 0.15),
+    0 4px 16px -4px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 0 color-mix(in srgb, white, transparent 92%),
+    inset 0 -1px 0 0 rgba(0, 0, 0, 0.1);
+}
+
+.dark .glass-pill:hover {
+  box-shadow:
+    0 2px 4px 0 rgba(0, 0, 0, 0.2),
+    0 8px 24px -6px rgba(0, 0, 0, 0.25),
+    inset 0 1px 0 0 color-mix(in srgb, white, transparent 86%),
+    inset 0 -1px 0 0 rgba(0, 0, 0, 0.1);
+  border-color: color-mix(in srgb, var(--color-hairline), transparent 40%);
+  border-top-color: color-mix(in srgb, white, transparent 82%);
+}
+
+/* GlowCard component styles */
+/* Hide scrollbar but keep scrollable */
+.scrollbar-hidden {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none;
+}
+
+/* Episode selector — top/bottom edge fade so the list dissolves into the sidebar background */
+.episode-fade {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    black 12%,
+    black 88%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    black 12%,
+    black 88%,
+    transparent 100%
+  );
+}
+
+.glow-card {
+  box-shadow: 0 0 0 0 transparent;
+  transition: box-shadow 300ms ease, transform 200ms ease;
+}
+
+.glow-card--active {
+  box-shadow: 0 0 15px -3px var(--glow);
+}
+
+.glow-card--interactive:hover {
+  box-shadow: 0 0 15px -3px var(--glow);
+  transform: scale(1.02);
+}
+
+.glow-card--disabled {
+  pointer-events: auto;
+}
