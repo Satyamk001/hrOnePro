@@ -637,13 +637,14 @@ function App() {
 
             {/* Sync button */}
             <SplashButton
+              className="action-pill-splash"
               onClick={handleSyncNow}
               disabled={syncing || !extensionAvailable}
+              loading={syncing}
               title={extensionAvailable ? "Fetch latest data from HROne" : "Install the extension to use Sync"}
-              text={syncing ? "Syncing…" : "Sync"}
-              width={88}
-              height={34}
-              fontSize={13}
+              text="Sync"
+              width={110}
+              height={30}
             />
           </div>
 
@@ -721,11 +722,11 @@ function App() {
                             </div>
                           </div>
                           {/* Progress bar — only on active */}
-                          {isActive && (
+                          {/* {isActive && (
                             <div className="h-[3px] w-full bg-hairline">
                               <div className="h-full bg-primary" style={{ width: '100%' }} />
                             </div>
-                          )}
+                          )} */}
                         </div>
                       </button>
                     );
