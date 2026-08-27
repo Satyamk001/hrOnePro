@@ -659,17 +659,7 @@ function App() {
         )}
 
         {/* Sidebar — Cinematic episode selector */}
-        <aside className="w-full xl:w-[22%] xl:max-w-[340px] lg:w-[25%] lg:max-w-[320px] md:w-[30%] md:max-w-[300px] bg-surface shrink-0 flex flex-col overflow-hidden md:border-r border-hairline z-10 max-md:h-auto max-md:min-h-[100px] max-md:max-h-[60vh] md:h-full relative shadow-sm">
-          {/* Header */}
-          <div className="sticky top-0 z-10 flex flex-col gap-y-3 justify-start px-4 py-4 bg-surface/80 backdrop-blur-xl border-b border-hairline">
-            {/* <h1 className="text-[14px] font-bold text-ink">History</h1> */}
-            {/* <div className="border border-hairline rounded-md py-2 px-3 flex items-center gap-x-2 bg-canvas hover:border-primary transition-colors focus-within:border-primary shadow-sm"> */}
-              {/* <svg aria-hidden="true" focusable="false" className="w-3 h-3 text-primary shrink-0" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-                <path fill="currentColor" d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352a144 144 0 1 0 0-288 144 144 0 1 0 0 288z"></path>
-              </svg> */}
-              {/* <input type="text" className="w-full bg-transparent focus:outline-none text-[13px] font-medium placeholder:text-[12px] placeholder:font-normal placeholder:text-slate text-ink" placeholder="Search month..." /> */}
-            {/* </div> */}
-          </div>
+        <aside className="w-full xl:w-[22%] xl:max-w-[340px] lg:w-[25%] lg:max-w-[320px] md:w-[30%] md:max-w-[300px] shrink-0 flex flex-col overflow-hidden z-10 max-md:h-auto max-md:min-h-[100px] max-md:max-h-[60vh] md:h-full relative">
           {/* Scrollable list */}
           <div className="flex-1 min-h-0 overflow-hidden">
             {savedEntries.length === 0 ? (
@@ -743,21 +733,6 @@ function App() {
                 </div>
               </div>
             )}
-          </div>
-          {/* Footer */}
-          <div className="shrink-0 px-4 py-3 border-t border-hairline">
-            {lastSynced && (
-              <p className="text-[10px] text-stone mb-1">
-                Last synced: {new Date(lastSynced).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
-              </p>
-            )}
-            <button
-              onClick={() => setShowPrivacy(true)}
-              className="text-[10px] text-steel hover:text-slate transition-colors"
-            >
-              Privacy & Data Safety
-            </button>
-            <p className="mt-0.5 text-[9px] text-muted font-mono">v{APP_VERSION}</p>
           </div>
         </aside>
 
@@ -901,6 +876,9 @@ function App() {
             }}
             yesterdayRecord={yesterdayRecord}
             todayAttendance={todayAttendance}
+            lastSynced={lastSynced}
+            appVersion={APP_VERSION}
+            onOpenPrivacy={() => setShowPrivacy(true)}
           />
         )}
       </div>

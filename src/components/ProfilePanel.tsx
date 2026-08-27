@@ -9,9 +9,12 @@ interface ProfilePanelProps {
   profile: EmployeeProfile;
   yesterdayRecord: EnrichedRecord | null;
   todayAttendance: TodayAttendance | null;
+  lastSynced: string | null;
+  appVersion: string;
+  onOpenPrivacy: () => void;
 }
 
-export default function ProfilePanel({ profile, yesterdayRecord, todayAttendance }: ProfilePanelProps) {
+export default function ProfilePanel({ profile, yesterdayRecord, todayAttendance, lastSynced, appVersion, onOpenPrivacy }: ProfilePanelProps) {
   const initials = profile.employeeName
     .split(" ")
     .slice(0, 2)
@@ -20,10 +23,10 @@ export default function ProfilePanel({ profile, yesterdayRecord, todayAttendance
     .toUpperCase();
 
   return (
-    <aside className="w-64 shrink-0 shadow-[-1px_0_8px_-2px_rgba(0,0,0,0.06)] bg-surface overflow-y-auto">
-      <div className="sticky top-0 p-5 space-y-6">
+    <aside className="w-64 shrink-0 overflow-y-auto">
+      <div className="sticky top-0 min-h-full p-5 space-y-6 flex flex-col">
         {/* Employee Card */}
-        <GlowCard className="rounded-lg bg-cream border border-beige-deep p-5 text-center">
+        <GlowCard className="rounded-lg p-5 text-center">
           {/* Avatar */}
           <div className="mx-auto w-16 h-16 rounded-full bg-primary flex items-center justify-center mb-3">
             {profile.profileImageUrl ? (
@@ -69,12 +72,12 @@ export default function ProfilePanel({ profile, yesterdayRecord, todayAttendance
 
         {/* Today's Attendance (from raw punches) */}
         {todayAttendance ? (
-          <div className="rounded-lg border border-hairline bg-canvas p-4">
+          <div className="rounded-lg border border-hairline p-4">
             <p className="text-[11px] font-semibold uppercase tracking-[1px] text-steel mb-3">Today</p>
             <TodayAttendanceLive todayAttendance={todayAttendance} />
           </div>
         ) : yesterdayRecord ? (
-          <div className="rounded-lg border border-hairline bg-canvas p-4">
+          <div className="rounded-lg border border-hairline p-4">
             <p className="text-[11px] font-semibold uppercase tracking-[1px] text-steel mb-3">Last Working Day</p>
             {yesterdayRecord.isWorkedDay ? (
               <div className="space-y-2">
@@ -122,6 +125,21 @@ export default function ProfilePanel({ profile, yesterdayRecord, todayAttendance
             )}
           </div>
         ) : null}
+
+        <div className="mt-auto pt-2">
+          {lastSynced && (
+            <p className="text-[10px] text-stone mb-1">
+              Last synced: {new Date(lastSynced).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+            </p>
+          )}
+          <button
+            onClick={onOpenPrivacy}
+            className="text-[10px] text-steel hover:text-slate transition-colors"
+          >
+            Privacy & Data Safety
+          </button>
+          <p className="mt-0.5 text-[9px] text-muted font-mono">v{appVersion}</p>
+        </div>
       </div>
     </aside>
   );
