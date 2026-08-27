@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import type { EmployeeProfile, EnrichedRecord, TodayAttendance } from "../types";
 import { formatMinutes, parseHHMM } from "../utils/timeCalculator";
 import { BlurReveal } from "./ui/BlurReveal";
-import AnimatedCounter from "./ui/AnimatedCounter";
 import { GlowCard } from "./ui/GlowCard";
 
 interface ProfilePanelProps {
@@ -23,8 +22,8 @@ export default function ProfilePanel({ profile, yesterdayRecord, todayAttendance
     .toUpperCase();
 
   return (
-    <aside className="w-64 shrink-0 overflow-y-auto">
-      <div className="sticky top-0 min-h-full p-5 space-y-6 flex flex-col">
+    <aside className="w-64 shrink-0 flex flex-col overflow-hidden mt-14 h-[calc(100%-3.5rem)]">
+      <div className="flex-1 overflow-y-auto p-5 space-y-6">
         {/* Employee Card */}
         <GlowCard className="rounded-lg p-5 text-center">
           {/* Avatar */}
@@ -126,19 +125,22 @@ export default function ProfilePanel({ profile, yesterdayRecord, todayAttendance
           </div>
         ) : null}
 
-        <div className="mt-auto pt-2">
-          {lastSynced && (
-            <p className="text-[10px] text-stone mb-1">
-              Last synced: {new Date(lastSynced).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
-            </p>
-          )}
+      </div>
+
+      <div className="p-5 pt-4 bg-canvas border-t border-hairline/50 shrink-0">
+        {lastSynced && (
+          <p className="text-[10px] text-stone mb-3">
+            Last synced: {new Date(lastSynced).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+          </p>
+        )}
+        <div className="flex items-center justify-between">
           <button
             onClick={onOpenPrivacy}
-            className="text-[10px] text-steel hover:text-slate transition-colors"
+            className="text-xs font-medium text-steel hover:text-ink transition-colors"
           >
             Privacy & Data Safety
           </button>
-          <p className="mt-0.5 text-[9px] text-muted font-mono">v{appVersion}</p>
+          <span className="text-[10px] text-muted font-mono">v{appVersion}</span>
         </div>
       </div>
     </aside>
@@ -177,13 +179,9 @@ function TodayAttendanceLive({ todayAttendance }: { todayAttendance: TodayAttend
       </div>
       <div className="flex justify-between items-center">
         <span className="text-xs text-steel">Worked So Far</span>
-        <AnimatedCounter
-          value={workedSoFar}
-          duration={2}
-          separator={false}
-          className="text-xs font-mono font-medium text-ink"
-          suffix=" min"
-        />
+        <span className="text-xs font-mono font-medium text-ink">
+          {formatMinutes(workedSoFar)}
+        </span>
       </div>
       <div className="flex justify-between">
         <span className="text-xs text-steel">Punches</span>

@@ -171,7 +171,7 @@ export function GlassToggle({
 
         {/* Icon — uses ink color for visibility in both modes */}
         <motion.div
-          className="relative z-10 drop-shadow-sm"
+          className="relative z-10 "
           style={{ color: "var(--color-ink)" }}
           animate={{
             scale: [1, 0.85, 1],

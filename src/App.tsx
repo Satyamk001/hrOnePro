@@ -650,7 +650,7 @@ function App() {
         </div>
       </header>
 
-      <div className="flex flex-1 overflow-hidden pt-14">
+      <div className="flex flex-1 overflow-hidden mt-0">
         {/* Toast notification */}
         {toast && (
           <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 bg-ink text-canvas text-xs font-medium rounded-full shadow-card animate-[fadeIn_0.2s_ease-out]">
@@ -737,7 +737,7 @@ function App() {
         </aside>
 
         {/* Main */}
-        <main className="flex-1 overflow-y-auto scrollbar-hidden">
+        <main className="flex-1 overflow-y-auto scrollbar-hidden pt-10">
           {showPrivacy ? (
             <PrivacyPage onBack={() => setShowPrivacy(false)} />
           ) : (

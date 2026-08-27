@@ -58,7 +58,7 @@ export const ClickRipple = ({
     <div
       ref={containerRef}
       onClick={handleClick}
-      style={{ position: "relative", overflow: "hidden", display: "inline-block" }}
+      style={{ position: "relative", overflow: "hidden", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
     >
       {children}
       <AnimatePresence>
