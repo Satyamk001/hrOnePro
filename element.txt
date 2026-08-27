@@ -1,0 +1,477 @@
+<div class="episodes w-[20%] bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-xl overflow-hidden flex justify-center items-center max-[1400px]:w-[380px] max-[1200px]:w-full max-[1200px]:h-auto max-[1200px]:min-h-[100px] max-[1200px]:max-h-[60vh]"
+    style="height: 738px;">
+    <div class="relative flex flex-col w-full h-full max-[1200px]:max-h-[500px]">
+        <div
+            class="sticky top-0 z-10 flex flex-col gap-y-3 justify-start px-4 py-4 bg-white/[0.04] backdrop-blur-2xl border-b border-white/[0.08]">
+            <h1 class="text-[14px] font-bold text-white">List of Episodes</h1>
+            <div
+                class="border border-[#ffffff1a] rounded-md py-2 px-3 flex items-center gap-x-2 bg-[#1a1a1a] hover:border-[#1E90FF] transition-colors focus-within:border-[#1E90FF]">
+                <svg aria-hidden="true" focusable="false" data-prefix="fas" data-icon="magnifying-glass"
+                    class="svg-inline--fa fa-magnifying-glass text-[11px] text-[#1E90FF]" role="img"
+                    xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                    <path fill="currentColor"
+                        d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352a144 144 0 1 0 0-288 144 144 0 1 0 0 288z">
+                    </path>
+                </svg><input type="text"
+                    class="w-full bg-transparent focus:outline-none text-[13px] font-medium placeholder:text-[12px] placeholder:font-normal placeholder:text-gray-500"
+                    placeholder="Search episode..."></div>
+        </div>
+        <div class="w-full flex-1 min-h-0 overflow-hidden">
+            <div class="w-full h-full overflow-y-scroll overflow-x-hidden episode-scroll-hidden flex flex-col items-center"
+                style="padding-top: 292px; padding-bottom: 292px; overscroll-behavior: contain;">
+                <div class="flex flex-col items-center w-full gap-y-2">
+                    <div data-episode="1"
+                        class="cursor-pointer transition-all duration-300 ease-out will-change-transform"
+                        style="z-index: 100; transform: scale(1.1); transform-origin: center center; opacity: 1; width: 72%; max-width: 230px;">
+                        <div
+                            class="relative rounded-lg overflow-hidden border transition-colors duration-300 w-full max-w-full border-[#1E90FF] shadow-lg shadow-[#1E90FF]/20">
+                            <div class="px-3 py-2 flex items-start gap-x-2.5 w-full min-w-0 bg-[#1E90FF]/20">
+                                <div
+                                    class="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center font-bold text-[12px] mt-0.5 bg-[#1E90FF] text-white">
+                                    1</div>
+                                <div class="flex-1 min-w-0 overflow-hidden">
+                                    <h4
+                                        class="text-[12px] font-semibold leading-snug transition-all duration-300 line-clamp-none whitespace-normal break-words text-white">
+                                        Episode 1</h4>
+                                    <p class="text-[10px] text-gray-500 mt-0.5 truncate">Oct 5, 2024</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div data-episode="2"
+                        class="cursor-pointer transition-all duration-300 ease-out will-change-transform"
+                        style="z-index: 49; transform: scale(0.95); transform-origin: center center; opacity: 0.6; width: 72%; max-width: 230px;">
+                        <div
+                            class="relative rounded-lg overflow-hidden border transition-colors duration-300 w-full max-w-full border-white/10">
+                            <div class="px-3 py-2 flex items-start gap-x-2.5 w-full min-w-0 bg-white/[0.04]">
+                                <div
+                                    class="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center font-bold text-[12px] mt-0.5 bg-black/60 text-gray-300">
+                                    2</div>
+                                <div class="flex-1 min-w-0 overflow-hidden">
+                                    <h4
+                                        class="text-[12px] font-semibold leading-snug transition-all duration-300 line-clamp-1 truncate text-gray-300">
+                                        Episode 2</h4>
+                                    <p class="text-[10px] text-gray-500 mt-0.5 truncate">Oct 5, 2024</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div data-episode="3"
+                        class="cursor-pointer transition-all duration-300 ease-out will-change-transform"
+                        style="z-index: 48; transform: scale(0.85); transform-origin: center center; opacity: 0.35; width: 72%; max-width: 230px;">
+                        <div
+                            class="relative rounded-lg overflow-hidden border transition-colors duration-300 w-full max-w-full border-white/10">
+                            <div class="px-3 py-2 flex items-start gap-x-2.5 w-full min-w-0 bg-white/[0.04]">
+                                <div
+                                    class="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center font-bold text-[12px] mt-0.5 bg-black/60 text-gray-300">
+                                    3</div>
+                                <div class="flex-1 min-w-0 overflow-hidden">
+                                    <h4
+                                        class="text-[12px] font-semibold leading-snug transition-all duration-300 line-clamp-1 truncate text-gray-300">
+                                        Episode 3</h4>
+                                    <p class="text-[10px] text-gray-500 mt-0.5 truncate">Oct 12, 2024</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div data-episode="4"
+                        class="cursor-pointer transition-all duration-300 ease-out will-change-transform"
+                        style="z-index: 47; transform: scale(0.8); transform-origin: center center; opacity: 0.2; width: 72%; max-width: 230px;">
+                        <div
+                            class="relative rounded-lg overflow-hidden border transition-colors duration-300 w-full max-w-full border-white/10">
+                            <div class="px-3 py-2 flex items-start gap-x-2.5 w-full min-w-0 bg-white/[0.04]">
+                                <div
+                                    class="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center font-bold text-[12px] mt-0.5 bg-black/60 text-gray-300">
+                                    4</div>
+                                <div class="flex-1 min-w-0 overflow-hidden">
+                                    <h4
+                                        class="text-[12px] font-semibold leading-snug transition-all duration-300 line-clamp-1 truncate text-gray-300">
+                                        Episode 4</h4>
+                                    <p class="text-[10px] text-gray-500 mt-0.5 truncate">Oct 19, 2024</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div data-episode="5"
+                        class="cursor-pointer transition-all duration-300 ease-out will-change-transform"
+                        style="z-index: 46; transform: scale(0.75); transform-origin: center center; opacity: 0.1; width: 72%; max-width: 230px;">
+                        <div
+                            class="relative rounded-lg overflow-hidden border transition-colors duration-300 w-full max-w-full border-white/10">
+                            <div class="px-3 py-2 flex items-start gap-x-2.5 w-full min-w-0 bg-white/[0.04]">
+                                <div
+                                    class="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center font-bold text-[12px] mt-0.5 bg-black/60 text-gray-300">
+                                    5</div>
+                                <div class="flex-1 min-w-0 overflow-hidden">
+                                    <h4
+                                        class="text-[12px] font-semibold leading-snug transition-all duration-300 line-clamp-1 truncate text-gray-300">
+                                        Episode 5</h4>
+                                    <p class="text-[10px] text-gray-500 mt-0.5 truncate">Oct 26, 2024</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div data-episode="6"
+                        class="cursor-pointer transition-all duration-300 ease-out will-change-transform"
+                        style="z-index: 45; transform: scale(0.75); transform-origin: center center; opacity: 0.1; width: 72%; max-width: 230px;">
+                        <div
+                            class="relative rounded-lg overflow-hidden border transition-colors duration-300 w-full max-w-full border-white/10">
+                            <div class="px-3 py-2 flex items-start gap-x-2.5 w-full min-w-0 bg-white/[0.04]">
+                                <div
+                                    class="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center font-bold text-[12px] mt-0.5 bg-black/60 text-gray-300">
+                                    6</div>
+                                <div class="flex-1 min-w-0 overflow-hidden">
+                                    <h4
+                                        class="text-[12px] font-semibold leading-snug transition-all duration-300 line-clamp-1 truncate text-gray-300">
+                                        Episode 6</h4>
+                                    <p class="text-[10px] text-gray-500 mt-0.5 truncate">Nov 2, 2024</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div data-episode="7"
+                        class="cursor-pointer transition-all duration-300 ease-out will-change-transform"
+                        style="z-index: 44; transform: scale(0.75); transform-origin: center center; opacity: 0.1; width: 72%; max-width: 230px;">
+                        <div
+                            class="relative rounded-lg overflow-hidden border transition-colors duration-300 w-full max-w-full border-white/10">
+                            <div class="px-3 py-2 flex items-start gap-x-2.5 w-full min-w-0 bg-white/[0.04]">
+                                <div
+                                    class="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center font-bold text-[12px] mt-0.5 bg-black/60 text-gray-300">
+                                    7</div>
+                                <div class="flex-1 min-w-0 overflow-hidden">
+                                    <h4
+                                        class="text-[12px] font-semibold leading-snug transition-all duration-300 line-clamp-1 truncate text-gray-300">
+                                        Episode 7</h4>
+                                    <p class="text-[10px] text-gray-500 mt-0.5 truncate">Nov 9, 2024</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div data-episode="8"
+                        class="cursor-pointer transition-all duration-300 ease-out will-change-transform"
+                        style="z-index: 43; transform: scale(0.75); transform-origin: center center; opacity: 0.1; width: 72%; max-width: 230px;">
+                        <div
+                            class="relative rounded-lg overflow-hidden border transition-colors duration-300 w-full max-w-full border-white/10">
+                            <div class="px-3 py-2 flex items-start gap-x-2.5 w-full min-w-0 bg-white/[0.04]">
+                                <div
+                                    class="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center font-bold text-[12px] mt-0.5 bg-black/60 text-gray-300">
+                                    8</div>
+                                <div class="flex-1 min-w-0 overflow-hidden">
+                                    <h4
+                                        class="text-[12px] font-semibold leading-snug transition-all duration-300 line-clamp-1 truncate text-gray-300">
+                                        Episode 8</h4>
+                                    <p class="text-[10px] text-gray-500 mt-0.5 truncate">Nov 16, 2024</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div data-episode="9"
+                        class="cursor-pointer transition-all duration-300 ease-out will-change-transform"
+                        style="z-index: 42; transform: scale(0.75); transform-origin: center center; opacity: 0.1; width: 72%; max-width: 230px;">
+                        <div
+                            class="relative rounded-lg overflow-hidden border transition-colors duration-300 w-full max-w-full border-white/10">
+                            <div class="px-3 py-2 flex items-start gap-x-2.5 w-full min-w-0 bg-white/[0.04]">
+                                <div
+                                    class="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center font-bold text-[12px] mt-0.5 bg-black/60 text-gray-300">
+                                    9</div>
+                                <div class="flex-1 min-w-0 overflow-hidden">
+                                    <h4
+                                        class="text-[12px] font-semibold leading-snug transition-all duration-300 line-clamp-1 truncate text-gray-300">
+                                        Episode 9</h4>
+                                    <p class="text-[10px] text-gray-500 mt-0.5 truncate">Nov 23, 2024</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div data-episode="10"
+                        class="cursor-pointer transition-all duration-300 ease-out will-change-transform"
+                        style="z-index: 41; transform: scale(0.75); transform-origin: center center; opacity: 0.1; width: 72%; max-width: 230px;">
+                        <div
+                            class="relative rounded-lg overflow-hidden border transition-colors duration-300 w-full max-w-full border-white/10">
+                            <div class="px-3 py-2 flex items-start gap-x-2.5 w-full min-w-0 bg-white/[0.04]">
+                                <div
+                                    class="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center font-bold text-[12px] mt-0.5 bg-black/60 text-gray-300">
+                                    10</div>
+                                <div class="flex-1 min-w-0 overflow-hidden">
+                                    <h4
+                                        class="text-[12px] font-semibold leading-snug transition-all duration-300 line-clamp-1 truncate text-gray-300">
+                                        Episode 10</h4>
+                                    <p class="text-[10px] text-gray-500 mt-0.5 truncate">Nov 30, 2024</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div data-episode="11"
+                        class="cursor-pointer transition-all duration-300 ease-out will-change-transform"
+                        style="z-index: 40; transform: scale(0.75); transform-origin: center center; opacity: 0.1; width: 72%; max-width: 230px;">
+                        <div
+                            class="relative rounded-lg overflow-hidden border transition-colors duration-300 w-full max-w-full border-white/10">
+                            <div class="px-3 py-2 flex items-start gap-x-2.5 w-full min-w-0 bg-white/[0.04]">
+                                <div
+                                    class="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center font-bold text-[12px] mt-0.5 bg-black/60 text-gray-300">
+                                    11</div>
+                                <div class="flex-1 min-w-0 overflow-hidden">
+                                    <h4
+                                        class="text-[12px] font-semibold leading-snug transition-all duration-300 line-clamp-1 truncate text-gray-300">
+                                        Episode 11</h4>
+                                    <p class="text-[10px] text-gray-500 mt-0.5 truncate">Dec 7, 2024</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div data-episode="12"
+                        class="cursor-pointer transition-all duration-300 ease-out will-change-transform"
+                        style="z-index: 39; transform: scale(0.75); transform-origin: center center; opacity: 0.1; width: 72%; max-width: 230px;">
+                        <div
+                            class="relative rounded-lg overflow-hidden border transition-colors duration-300 w-full max-w-full border-white/10">
+                            <div class="px-3 py-2 flex items-start gap-x-2.5 w-full min-w-0 bg-white/[0.04]">
+                                <div
+                                    class="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center font-bold text-[12px] mt-0.5 bg-black/60 text-gray-300">
+                                    12</div>
+                                <div class="flex-1 min-w-0 overflow-hidden">
+                                    <h4
+                                        class="text-[12px] font-semibold leading-snug transition-all duration-300 line-clamp-1 truncate text-gray-300">
+                                        Episode 12</h4>
+                                    <p class="text-[10px] text-gray-500 mt-0.5 truncate">Dec 14, 2024</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div data-episode="13"
+                        class="cursor-pointer transition-all duration-300 ease-out will-change-transform"
+                        style="z-index: 38; transform: scale(0.75); transform-origin: center center; opacity: 0.1; width: 72%; max-width: 230px;">
+                        <div
+                            class="relative rounded-lg overflow-hidden border transition-colors duration-300 w-full max-w-full border-white/10">
+                            <div class="px-3 py-2 flex items-start gap-x-2.5 w-full min-w-0 bg-white/[0.04]">
+                                <div
+                                    class="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center font-bold text-[12px] mt-0.5 bg-black/60 text-gray-300">
+                                    13</div>
+                                <div class="flex-1 min-w-0 overflow-hidden">
+                                    <h4
+                                        class="text-[12px] font-semibold leading-snug transition-all duration-300 line-clamp-1 truncate text-gray-300">
+                                        Episode 13</h4>
+                                    <p class="text-[10px] text-gray-500 mt-0.5 truncate">Dec 21, 2024</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div data-episode="14"
+                        class="cursor-pointer transition-all duration-300 ease-out will-change-transform"
+                        style="z-index: 37; transform: scale(0.75); transform-origin: center center; opacity: 0.1; width: 72%; max-width: 230px;">
+                        <div
+                            class="relative rounded-lg overflow-hidden border transition-colors duration-300 w-full max-w-full border-white/10">
+                            <div class="px-3 py-2 flex items-start gap-x-2.5 w-full min-w-0 bg-white/[0.04]">
+                                <div
+                                    class="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center font-bold text-[12px] mt-0.5 bg-black/60 text-gray-300">
+                                    14</div>
+                                <div class="flex-1 min-w-0 overflow-hidden">
+                                    <h4
+                                        class="text-[12px] font-semibold leading-snug transition-all duration-300 line-clamp-1 truncate text-gray-300">
+                                        Episode 14</h4>
+                                    <p class="text-[10px] text-gray-500 mt-0.5 truncate">Dec 28, 2024</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div data-episode="15"
+                        class="cursor-pointer transition-all duration-300 ease-out will-change-transform"
+                        style="z-index: 36; transform: scale(0.75); transform-origin: center center; opacity: 0.1; width: 72%; max-width: 230px;">
+                        <div
+                            class="relative rounded-lg overflow-hidden border transition-colors duration-300 w-full max-w-full border-white/10">
+                            <div class="px-3 py-2 flex items-start gap-x-2.5 w-full min-w-0 bg-white/[0.04]">
+                                <div
+                                    class="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center font-bold text-[12px] mt-0.5 bg-black/60 text-gray-300">
+                                    15</div>
+                                <div class="flex-1 min-w-0 overflow-hidden">
+                                    <h4
+                                        class="text-[12px] font-semibold leading-snug transition-all duration-300 line-clamp-1 truncate text-gray-300">
+                                        Episode 15</h4>
+                                    <p class="text-[10px] text-gray-500 mt-0.5 truncate">Jan 4, 2025</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div data-episode="16"
+                        class="cursor-pointer transition-all duration-300 ease-out will-change-transform"
+                        style="z-index: 35; transform: scale(0.75); transform-origin: center center; opacity: 0.1; width: 72%; max-width: 230px;">
+                        <div
+                            class="relative rounded-lg overflow-hidden border transition-colors duration-300 w-full max-w-full border-white/10">
+                            <div class="px-3 py-2 flex items-start gap-x-2.5 w-full min-w-0 bg-white/[0.04]">
+                                <div
+                                    class="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center font-bold text-[12px] mt-0.5 bg-black/60 text-gray-300">
+                                    16</div>
+                                <div class="flex-1 min-w-0 overflow-hidden">
+                                    <h4
+                                        class="text-[12px] font-semibold leading-snug transition-all duration-300 line-clamp-1 truncate text-gray-300">
+                                        Episode 16</h4>
+                                    <p class="text-[10px] text-gray-500 mt-0.5 truncate">Jan 11, 2025</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div data-episode="17"
+                        class="cursor-pointer transition-all duration-300 ease-out will-change-transform"
+                        style="z-index: 34; transform: scale(0.75); transform-origin: center center; opacity: 0.1; width: 72%; max-width: 230px;">
+                        <div
+                            class="relative rounded-lg overflow-hidden border transition-colors duration-300 w-full max-w-full border-white/10">
+                            <div class="px-3 py-2 flex items-start gap-x-2.5 w-full min-w-0 bg-white/[0.04]">
+                                <div
+                                    class="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center font-bold text-[12px] mt-0.5 bg-black/60 text-gray-300">
+                                    17</div>
+                                <div class="flex-1 min-w-0 overflow-hidden">
+                                    <h4
+                                        class="text-[12px] font-semibold leading-snug transition-all duration-300 line-clamp-1 truncate text-gray-300">
+                                        Episode 17</h4>
+                                    <p class="text-[10px] text-gray-500 mt-0.5 truncate">Jan 18, 2025</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div data-episode="18"
+                        class="cursor-pointer transition-all duration-300 ease-out will-change-transform"
+                        style="z-index: 33; transform: scale(0.75); transform-origin: center center; opacity: 0.1; width: 72%; max-width: 230px;">
+                        <div
+                            class="relative rounded-lg overflow-hidden border transition-colors duration-300 w-full max-w-full border-white/10">
+                            <div class="px-3 py-2 flex items-start gap-x-2.5 w-full min-w-0 bg-white/[0.04]">
+                                <div
+                                    class="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center font-bold text-[12px] mt-0.5 bg-black/60 text-gray-300">
+                                    18</div>
+                                <div class="flex-1 min-w-0 overflow-hidden">
+                                    <h4
+                                        class="text-[12px] font-semibold leading-snug transition-all duration-300 line-clamp-1 truncate text-gray-300">
+                                        Episode 18</h4>
+                                    <p class="text-[10px] text-gray-500 mt-0.5 truncate">Jan 25, 2025</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div data-episode="19"
+                        class="cursor-pointer transition-all duration-300 ease-out will-change-transform"
+                        style="z-index: 32; transform: scale(0.75); transform-origin: center center; opacity: 0.1; width: 72%; max-width: 230px;">
+                        <div
+                            class="relative rounded-lg overflow-hidden border transition-colors duration-300 w-full max-w-full border-white/10">
+                            <div class="px-3 py-2 flex items-start gap-x-2.5 w-full min-w-0 bg-white/[0.04]">
+                                <div
+                                    class="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center font-bold text-[12px] mt-0.5 bg-black/60 text-gray-300">
+                                    19</div>
+                                <div class="flex-1 min-w-0 overflow-hidden">
+                                    <h4
+                                        class="text-[12px] font-semibold leading-snug transition-all duration-300 line-clamp-1 truncate text-gray-300">
+                                        Episode 19</h4>
+                                    <p class="text-[10px] text-gray-500 mt-0.5 truncate">Feb 1, 2025</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div data-episode="20"
+                        class="cursor-pointer transition-all duration-300 ease-out will-change-transform"
+                        style="z-index: 31; transform: scale(0.75); transform-origin: center center; opacity: 0.1; width: 72%; max-width: 230px;">
+                        <div
+                            class="relative rounded-lg overflow-hidden border transition-colors duration-300 w-full max-w-full border-white/10">
+                            <div class="px-3 py-2 flex items-start gap-x-2.5 w-full min-w-0 bg-white/[0.04]">
+                                <div
+                                    class="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center font-bold text-[12px] mt-0.5 bg-black/60 text-gray-300">
+                                    20</div>
+                                <div class="flex-1 min-w-0 overflow-hidden">
+                                    <h4
+                                        class="text-[12px] font-semibold leading-snug transition-all duration-300 line-clamp-1 truncate text-gray-300">
+                                        Episode 20</h4>
+                                    <p class="text-[10px] text-gray-500 mt-0.5 truncate">Feb 8, 2025</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div data-episode="21"
+                        class="cursor-pointer transition-all duration-300 ease-out will-change-transform"
+                        style="z-index: 30; transform: scale(0.75); transform-origin: center center; opacity: 0.1; width: 72%; max-width: 230px;">
+                        <div
+                            class="relative rounded-lg overflow-hidden border transition-colors duration-300 w-full max-w-full border-white/10">
+                            <div class="px-3 py-2 flex items-start gap-x-2.5 w-full min-w-0 bg-white/[0.04]">
+                                <div
+                                    class="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center font-bold text-[12px] mt-0.5 bg-black/60 text-gray-300">
+                                    21</div>
+                                <div class="flex-1 min-w-0 overflow-hidden">
+                                    <h4
+                                        class="text-[12px] font-semibold leading-snug transition-all duration-300 line-clamp-1 truncate text-gray-300">
+                                        Episode 21</h4>
+                                    <p class="text-[10px] text-gray-500 mt-0.5 truncate">Feb 15, 2025</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div data-episode="22"
+                        class="cursor-pointer transition-all duration-300 ease-out will-change-transform"
+                        style="z-index: 29; transform: scale(0.75); transform-origin: center center; opacity: 0.1; width: 72%; max-width: 230px;">
+                        <div
+                            class="relative rounded-lg overflow-hidden border transition-colors duration-300 w-full max-w-full border-white/10">
+                            <div class="px-3 py-2 flex items-start gap-x-2.5 w-full min-w-0 bg-white/[0.04]">
+                                <div
+                                    class="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center font-bold text-[12px] mt-0.5 bg-black/60 text-gray-300">
+                                    22</div>
+                                <div class="flex-1 min-w-0 overflow-hidden">
+                                    <h4
+                                        class="text-[12px] font-semibold leading-snug transition-all duration-300 line-clamp-1 truncate text-gray-300">
+                                        Episode 22</h4>
+                                    <p class="text-[10px] text-gray-500 mt-0.5 truncate">Feb 22, 2025</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div data-episode="23"
+                        class="cursor-pointer transition-all duration-300 ease-out will-change-transform"
+                        style="z-index: 28; transform: scale(0.75); transform-origin: center center; opacity: 0.1; width: 72%; max-width: 230px;">
+                        <div
+                            class="relative rounded-lg overflow-hidden border transition-colors duration-300 w-full max-w-full border-white/10">
+                            <div class="px-3 py-2 flex items-start gap-x-2.5 w-full min-w-0 bg-white/[0.04]">
+                                <div
+                                    class="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center font-bold text-[12px] mt-0.5 bg-black/60 text-gray-300">
+                                    23</div>
+                                <div class="flex-1 min-w-0 overflow-hidden">
+                                    <h4
+                                        class="text-[12px] font-semibold leading-snug transition-all duration-300 line-clamp-1 truncate text-gray-300">
+                                        Episode 23</h4>
+                                    <p class="text-[10px] text-gray-500 mt-0.5 truncate">Mar 1, 2025</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div data-episode="24"
+                        class="cursor-pointer transition-all duration-300 ease-out will-change-transform"
+                        style="z-index: 27; transform: scale(0.75); transform-origin: center center; opacity: 0.1; width: 72%; max-width: 230px;">
+                        <div
+                            class="relative rounded-lg overflow-hidden border transition-colors duration-300 w-full max-w-full border-white/10">
+                            <div class="px-3 py-2 flex items-start gap-x-2.5 w-full min-w-0 bg-white/[0.04]">
+                                <div
+                                    class="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center font-bold text-[12px] mt-0.5 bg-black/60 text-gray-300">
+                                    24</div>
+                                <div class="flex-1 min-w-0 overflow-hidden">
+                                    <h4
+                                        class="text-[12px] font-semibold leading-snug transition-all duration-300 line-clamp-1 truncate text-gray-300">
+                                        Episode 24</h4>
+                                    <p class="text-[10px] text-gray-500 mt-0.5 truncate">Mar 8, 2025</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div data-episode="25"
+                        class="cursor-pointer transition-all duration-300 ease-out will-change-transform"
+                        style="z-index: 26; transform: scale(0.75); transform-origin: center center; opacity: 0.1; width: 72%; max-width: 230px;">
+                        <div
+                            class="relative rounded-lg overflow-hidden border transition-colors duration-300 w-full max-w-full border-white/10">
+                            <div class="px-3 py-2 flex items-start gap-x-2.5 w-full min-w-0 bg-white/[0.04]">
+                                <div
+                                    class="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center font-bold text-[12px] mt-0.5 bg-black/60 text-gray-300">
+                                    25</div>
+                                <div class="flex-1 min-w-0 overflow-hidden">
+                                    <h4
+                                        class="text-[12px] font-semibold leading-snug transition-all duration-300 line-clamp-1 truncate text-gray-300">
+                                        Episode 25</h4>
+                                    <p class="text-[10px] text-gray-500 mt-0.5 truncate">Mar 15, 2025</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

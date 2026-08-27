@@ -140,8 +140,8 @@ function YesterdaySummary({ records, allEntries }: { records: EnrichedRecord[]; 
           {rec.status === "Absent"
             ? "Absent — no attendance recorded"
             : rec.status === "Flexi Leave" || rec.status === "Earned Leave" || rec.status === "Leave"
-            ? `${rec.status} — on leave`
-            : `${rec.status} — not a working day`}
+              ? `${rec.status} — on leave`
+              : `${rec.status} — not a working day`}
         </p>
       )}
     </div>
@@ -209,7 +209,7 @@ function LiveClock({ todayAttendance }: { todayAttendance: TodayAttendance | nul
       <svg className="w-3.5 h-3.5 text-steel shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
-      <span className="font-mono text-sm font-semibold text-ink tabular-nums inline-flex items-center">
+      <span className="font-mono text-sm font-semibold text-ink tabular-nums inline-flex items-center clock-time">
         <PaddedCounter value={hours} duration={0.3} continuous separator={false} className="text-sm font-mono text-ink" />
         <span className="text-steel">:</span>
         <PaddedCounter value={minutes} duration={0.3} continuous separator={false} className="text-sm font-mono text-ink" />
@@ -218,8 +218,8 @@ function LiveClock({ todayAttendance }: { todayAttendance: TodayAttendance | nul
       </span>
       {timeLeftDisplay && (
         <>
-          <div className="w-px h-4 bg-hairline" />
-          <span className={`text-xs font-medium ${shiftComplete ? "text-success" : "text-primary"}`}>
+          <div className="pill-divider" />
+          <span className={`clock-status text-xs font-medium ${shiftComplete ? "status-complete" : "status"}`}>
             {timeLeftDisplay}
           </span>
         </>
@@ -271,9 +271,95 @@ function App() {
 
   const bookmarkletRef = useRef<HTMLAnchorElement>(null);
   useEffect(() => { if (bookmarkletRef.current) bookmarkletRef.current.setAttribute("href", bookmarkletCode); }, [bookmarkletCode]);
-
-  // Center-focus the active history item when selection changes
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const itemsRef = useRef<(HTMLButtonElement | null)[]>([]);
   const activeItemRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const updateVisuals = () => {
+      const containerRect = container.getBoundingClientRect();
+      const containerCenter = containerRect.top + containerRect.height / 2;
+
+      // Update padding to allow centering first/last items
+      const halfHeight = containerRect.height / 2;
+      if (container.style.paddingTop !== `${halfHeight}px`) {
+        container.style.paddingTop = `${halfHeight}px`;
+        container.style.paddingBottom = `${halfHeight}px`;
+      }
+
+      itemsRef.current.forEach((item) => {
+        if (!item) return;
+        const rect = item.getBoundingClientRect();
+        const itemCenter = rect.top + rect.height / 2;
+
+        const pixelDistance = Math.abs(itemCenter - containerCenter);
+        const itemHeight = item.offsetHeight;
+        const itemSpacing = itemHeight + 8; // approx 8px gap
+        if (itemSpacing === 0) return;
+
+        let positionDistance = pixelDistance / itemSpacing;
+
+        let scale = 1.10;
+        let opacity = 1.00;
+        let zIndex = 100;
+
+        if (positionDistance < 1) {
+          scale = 1.10 - (1.10 - 0.95) * positionDistance;
+          opacity = 1.00 - (1.00 - 0.60) * positionDistance;
+          zIndex = 100;
+        } else if (positionDistance < 2) {
+          const p = positionDistance - 1;
+          scale = 0.95 - (0.95 - 0.85) * p;
+          opacity = 0.60 - (0.60 - 0.35) * p;
+          zIndex = 50;
+        } else if (positionDistance < 3) {
+          const p = positionDistance - 2;
+          scale = 0.85 - (0.85 - 0.80) * p;
+          opacity = 0.35 - (0.35 - 0.20) * p;
+          zIndex = 40;
+        } else if (positionDistance < 4) {
+          const p = positionDistance - 3;
+          scale = 0.80 - (0.80 - 0.75) * p;
+          opacity = 0.20 - (0.20 - 0.10) * p;
+          zIndex = 30;
+        } else {
+          scale = 0.75;
+          opacity = 0.10;
+          zIndex = 20;
+        }
+
+        item.style.transform = `scale(${scale})`;
+        item.style.opacity = opacity.toString();
+        item.style.zIndex = zIndex.toString();
+      });
+    };
+
+    let ticking = false;
+    const onScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          updateVisuals();
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+
+    container.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    updateVisuals();
+    setTimeout(updateVisuals, 50);
+    setTimeout(updateVisuals, 300);
+
+    return () => {
+      container.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+    };
+  }, [savedEntries, activeKey]);
+
   useEffect(() => {
     if (activeItemRef.current) {
       activeItemRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -488,33 +574,34 @@ function App() {
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-canvas relative">
       {/* Glassmorphism Three-Pill Navigation */}
-      <header className="absolute top-0 left-0 right-0 z-30 pointer-events-none">
-        <div className="px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between gap-3 sm:gap-5 lg:gap-8 pointer-events-auto">
+      <header className="topbar absolute top-0 left-0 right-0 z-30 pointer-events-none">
+        <div className="topbar-shell pointer-events-auto">
 
           {/* Pill 1 — Brand / User (Left) */}
-          <div className="glass-pill flex items-center gap-2.5 px-4 sm:px-5 py-2.5 min-w-0">
-            <span className="font-display text-base sm:text-lg font-semibold text-ink tracking-display truncate">
+          <div className="glass-pill brand-pill">
+            <span className="brand-title">
               Attendance Insights
             </span>
             {userName && (
-              <span className="text-xs sm:text-sm text-steel font-normal truncate">
+              <span className="brand-user">
                 / {userName}
               </span>
             )}
           </div>
 
           {/* Pill 2 — Time / Status (Center) */}
-          <div className="glass-pill flex items-center gap-2.5 px-4 py-2.5 shrink-0">
+          <div className="glass-pill clock-pill">
             <LiveClock todayAttendance={todayAttendance} />
           </div>
 
           {/* Pill 3 — Actions (Right) */}
-          <div className="glass-pill flex items-center gap-2 px-3 py-2.5 shrink-0">
+          <div className="glass-pill action-pill">
             {/* Help button */}
             <ClickRipple>
               <button
                 onClick={() => setShowOnboarding(!showOnboarding)}
-                className={`w-8 h-8 inline-flex items-center justify-center rounded-lg text-charcoal hover:text-ink hover:bg-hairline-soft/50 transition-all duration-200 relative ${showOnboarding ? "text-primary" : ""}`}
+                className="topbar-action relative"
+                data-active={showOnboarding ? "true" : "false"}
                 aria-label="Setup & Downloads"
                 title="Setup & Downloads"
               >
@@ -522,13 +609,13 @@ function App() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" />
                 </svg>
                 {hasUpdate && (
-                  <span className="absolute top-1 right-1 w-2 h-2 bg-primary rounded-full" />
+                  <span className="update-dot" />
                 )}
               </button>
             </ClickRipple>
 
             {/* Divider */}
-            <div className="w-px h-5 bg-hairline" />
+            <div className="pill-divider" />
 
             {/* Theme toggle */}
             <GlassToggle
@@ -546,7 +633,7 @@ function App() {
             />
 
             {/* Divider */}
-            <div className="w-px h-5 bg-hairline" />
+            <div className="pill-divider" />
 
             {/* Sync button */}
             <SplashButton
@@ -554,7 +641,7 @@ function App() {
               disabled={syncing || !extensionAvailable}
               title={extensionAvailable ? "Fetch latest data from HROne" : "Install the extension to use Sync"}
               text={syncing ? "Syncing…" : "Sync"}
-              width={100}
+              width={88}
               height={34}
               fontSize={13}
             />
@@ -572,10 +659,16 @@ function App() {
         )}
 
         {/* Sidebar — Cinematic episode selector */}
-        <aside className="w-56 bg-surface shrink-0 flex flex-col overflow-hidden">
+        <aside className="w-full xl:w-[22%] xl:max-w-[340px] lg:w-[25%] lg:max-w-[320px] md:w-[30%] md:max-w-[300px] bg-surface shrink-0 flex flex-col overflow-hidden md:border-r border-hairline z-10 max-md:h-auto max-md:min-h-[100px] max-md:max-h-[60vh] md:h-full relative shadow-sm">
           {/* Header */}
-          <div className="sticky top-0 z-10 flex flex-col gap-y-2 px-4 py-4 bg-surface/80 backdrop-blur-xl border-b border-hairline">
-            <h1 className="text-[14px] font-bold text-ink">History</h1>
+          <div className="sticky top-0 z-10 flex flex-col gap-y-3 justify-start px-4 py-4 bg-surface/80 backdrop-blur-xl border-b border-hairline">
+            {/* <h1 className="text-[14px] font-bold text-ink">History</h1> */}
+            {/* <div className="border border-hairline rounded-md py-2 px-3 flex items-center gap-x-2 bg-canvas hover:border-primary transition-colors focus-within:border-primary shadow-sm"> */}
+              {/* <svg aria-hidden="true" focusable="false" className="w-3 h-3 text-primary shrink-0" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                <path fill="currentColor" d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352a144 144 0 1 0 0-288 144 144 0 1 0 0 288z"></path>
+              </svg> */}
+              {/* <input type="text" className="w-full bg-transparent focus:outline-none text-[13px] font-medium placeholder:text-[12px] placeholder:font-normal placeholder:text-slate text-ink" placeholder="Search month..." /> */}
+            {/* </div> */}
           </div>
           {/* Scrollable list */}
           <div className="flex-1 min-h-0 overflow-hidden">
@@ -583,66 +676,53 @@ function App() {
               <p className="px-5 py-8 text-sm text-slate text-center">No data yet</p>
             ) : (
               <div
-                className="w-full h-full overflow-y-scroll overflow-x-hidden scrollbar-hidden flex flex-col items-center"
-                style={{ paddingTop: '40%', paddingBottom: '40%', overscrollBehavior: 'contain' }}
+                ref={scrollContainerRef}
+                className="w-full h-full overflow-y-auto overflow-x-hidden scrollbar-hidden relative max-md:max-h-[35vh]"
+                style={{ overscrollBehavior: 'contain' }}
               >
-                <div className="flex flex-col items-center w-full gap-y-2">
+                <div className="flex flex-col items-center w-full gap-[8px]">
                   {savedEntries.slice().sort((a, b) => b.key.localeCompare(a.key)).map((entry, index) => {
                     const isActive = activeKey === entry.key;
-                    const sortedEntries = savedEntries.slice().sort((a, b) => b.key.localeCompare(a.key));
-                    const activeIndex = sortedEntries.findIndex(e => e.key === activeKey);
-                    const distance = Math.abs(index - activeIndex);
-
-                    // Distance-based scale + opacity (matching the reference pattern)
-                    let scale = 1.05;
-                    let opacity = 1;
-                    let zIndex = 100;
-
-                    if (!isActive) {
-                      if (distance === 1) { scale = 0.95; opacity = 0.6; zIndex = 49; }
-                      else if (distance === 2) { scale = 0.88; opacity = 0.35; zIndex = 48; }
-                      else if (distance === 3) { scale = 0.82; opacity = 0.2; zIndex = 47; }
-                      else { scale = 0.78; opacity = 0.1; zIndex = Math.max(20, 46 - distance); }
-                    }
 
                     return (
                       <button
                         key={entry.key}
-                        ref={isActive ? activeItemRef : undefined}
-                        onClick={() => setActiveKey(entry.key)}
-                        className="cursor-pointer transition-all duration-300 ease-out will-change-transform"
+                        ref={(el) => {
+                          if (isActive) activeItemRef.current = el;
+                          itemsRef.current[index] = el;
+                        }}
+                        onClick={(e) => {
+                          setActiveKey(entry.key);
+                          e.currentTarget.scrollIntoView({ behavior: "smooth", block: "center" });
+                        }}
+                        className="cursor-pointer block text-left"
                         style={{
-                          zIndex,
-                          transform: `scale(${scale})`,
-                          transformOrigin: 'center center',
-                          opacity,
                           width: '72%',
-                          maxWidth: '200px',
+                          maxWidth: '230px',
+                          transformOrigin: 'center center',
+                          willChange: 'transform, opacity',
+                          transition: 'transform 300ms ease-out, opacity 300ms ease-out, border-color 300ms ease-out, background-color 300ms ease-out, box-shadow 300ms ease-out',
                         }}
                       >
-                        <div className={`relative rounded-lg overflow-hidden border transition-colors duration-300 w-full ${
-                          isActive
+                        <div className={`relative rounded-lg overflow-hidden border transition-colors duration-300 w-full max-w-full ${isActive
                             ? "border-primary shadow-lg shadow-primary/20"
                             : "border-hairline hover:border-hairline-strong"
-                        }`}>
-                          <div className={`px-3 py-2 flex items-start gap-x-2.5 w-full min-w-0 ${
-                            isActive ? "bg-primary/20" : "bg-canvas/50"
                           }`}>
+                          <div className={`px-3 py-2 flex items-start gap-x-2.5 w-full min-w-0 ${isActive ? "bg-primary/20" : "bg-canvas/50"
+                            }`}>
                             {/* Number badge */}
-                            <div className={`flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center font-bold text-[12px] mt-0.5 ${
-                              isActive
+                            <div className={`flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center font-bold text-[12px] mt-0.5 ${isActive
                                 ? "bg-primary text-white"
                                 : "bg-hairline-soft text-steel"
-                            }`}>
+                              }`}>
                               {index + 1}
                             </div>
                             {/* Title + date */}
-                            <div className="flex-1 min-w-0 overflow-hidden">
-                              <h4 className={`text-[12px] font-semibold leading-snug transition-all duration-300 ${
-                                isActive
-                                  ? "whitespace-normal break-words text-ink"
-                                  : "truncate text-slate"
-                              }`}>
+                            <div className="flex-1 min-w-0 overflow-hidden text-left">
+                              <h4 className={`text-[12px] font-semibold leading-snug transition-all duration-300 ${isActive
+                                  ? "line-clamp-none whitespace-normal break-words text-ink"
+                                  : "line-clamp-1 truncate text-slate"
+                                }`}>
                                 {entry.label}
                               </h4>
                               <p className="text-[10px] text-stone mt-0.5 truncate">
@@ -686,121 +766,121 @@ function App() {
           {showPrivacy ? (
             <PrivacyPage onBack={() => setShowPrivacy(false)} />
           ) : (
-          <div className="px-8 py-8 space-y-8 max-w-[1280px]">
-            {(!attendanceData || showOnboarding) ? (
-              <div className="flex flex-col items-center justify-center py-20 text-center">
-                {showOnboarding && attendanceData && (
-                  <button
-                    onClick={() => { setShowOnboarding(false); setHasUpdate(false); }}
-                    className="mb-6 text-sm text-link hover:underline font-medium"
-                  >
-                    ← Back to dashboard
-                  </button>
-                )}
-                {hasUpdate && (
-                  <div className="mb-6 px-5 py-3 rounded-lg bg-cream border border-beige-deep text-sm text-charcoal">
-                    <strong className="text-ink">Update available!</strong> Download the latest extension (v{EXTENSION_VERSION}) and re-drag the bookmarklet (v{BOOKMARKLET_VERSION}).
-                  </div>
-                )}
-                <div className="mb-10">
-                  <h2 className="font-display text-4xl font-medium text-ink tracking-display mb-3">
-                    Know your hours in seconds
-                  </h2>
-                  <p className="text-base text-slate max-w-md leading-relaxed">
-                    See overtime, shortfall, and net balance from your HROne attendance — no manual calculation needed.
-                  </p>
-                </div>
-
-                <div className="rounded-lg bg-cream border border-beige-deep p-8 max-w-lg w-full text-left">
-                  <p className="text-[11px] font-semibold uppercase tracking-[1px] text-steel mb-5">
-                    Get started in 30 seconds
-                  </p>
-                  <div className="space-y-5">
-                    <div className="flex gap-3">
-                      <span className="shrink-0 w-7 h-7 rounded-full bg-primary text-white flex items-center justify-center text-xs font-semibold">1</span>
-                      <div>
-                        <p className="text-sm font-medium text-ink">Drag this button to your bookmarks bar:</p>
-                        <a
-                          ref={bookmarkletRef}
-                          href="#"
-                          className="mt-2 px-4 py-2 inline-flex items-center gap-2 bg-primary text-white rounded-md text-sm font-medium cursor-grab active:cursor-grabbing"
-                          onClick={(e) => { e.preventDefault(); alert("Drag this button to your bookmarks bar.\nThen click it on the HROne calendar page."); }}
-                        >
-                          Sync Attendance
-                          <span className="text-[10px] opacity-70 font-mono">v{BOOKMARKLET_VERSION}</span>
-                        </a>
-                      </div>
-                    </div>
-                    <div className="flex gap-3">
-                      <span className="shrink-0 w-7 h-7 rounded-full bg-primary text-white flex items-center justify-center text-xs font-semibold">2</span>
-                      <div>
-                        <p className="text-sm font-medium text-ink">
-                          Open{" "}
-                          <a href="https://app.hrone.cloud/app/myprofile/calendar" target="_blank" rel="noopener noreferrer" className="text-link hover:underline">
-                            HROne Calendar
-                          </a>
-                        </p>
-                        <p className="text-xs text-steel mt-0.5">Log in if needed, then select the month you want</p>
-                      </div>
-                    </div>
-                    <div className="flex gap-3">
-                      <span className="shrink-0 w-7 h-7 rounded-full bg-primary text-white flex items-center justify-center text-xs font-semibold">3</span>
-                      <div>
-                        <p className="text-sm font-medium text-ink">Click the bookmark — data appears here</p>
-                        <p className="text-xs text-steel mt-0.5">First time you'll enter your Employee ID (from your HROne profile)</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="mt-6 pt-5 border-t border-beige-deep text-center space-y-2">
-                    <a
-                      href="/attendance-extension.zip"
-                      download="attendance-extension.zip"
-                      className="inline-flex items-center gap-2 px-4 py-2 border border-hairline-strong bg-canvas text-ink rounded-md text-sm font-medium hover:bg-hairline-soft transition-colors"
+            <div className="px-8 py-8 space-y-8 max-w-[1280px]">
+              {(!attendanceData || showOnboarding) ? (
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                  {showOnboarding && attendanceData && (
+                    <button
+                      onClick={() => { setShowOnboarding(false); setHasUpdate(false); }}
+                      className="mb-6 text-sm text-link hover:underline font-medium"
                     >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-                      </svg>
-                      Download Extension
-                    </a>
-                    <p className="text-[11px] text-stone">
-                      Unzip → chrome://extensions → Developer mode → Load unpacked
+                      ← Back to dashboard
+                    </button>
+                  )}
+                  {hasUpdate && (
+                    <div className="mb-6 px-5 py-3 rounded-lg bg-cream border border-beige-deep text-sm text-charcoal">
+                      <strong className="text-ink">Update available!</strong> Download the latest extension (v{EXTENSION_VERSION}) and re-drag the bookmarklet (v{BOOKMARKLET_VERSION}).
+                    </div>
+                  )}
+                  <div className="mb-10">
+                    <h2 className="font-display text-4xl font-medium text-ink tracking-display mb-3">
+                      Know your hours in seconds
+                    </h2>
+                    <p className="text-base text-slate max-w-md leading-relaxed">
+                      See overtime, shortfall, and net balance from your HROne attendance — no manual calculation needed.
                     </p>
                   </div>
-                </div>
-              </div>
-            ) : (
-              <>
-                {activeLabel && (
-                  <h2 className="font-display text-3xl font-medium text-ink tracking-display">{activeLabel}</h2>
-                )}
 
-                {enrichedRecords && <YesterdaySummary records={enrichedRecords} allEntries={savedEntries} />}
-                {dashboardMetrics && <Dashboard metrics={dashboardMetrics} />}
-
-                {tableRecords && (
-                  <section>
-                    <div className="flex items-center justify-between mb-4">
-                      <p className="text-[11px] font-semibold uppercase tracking-[1px] text-steel">
-                        {showAllDays ? "All Days" : "Worked Days"}
-                      </p>
-                      <button
-                        onClick={() => setShowAllDays(!showAllDays)}
-                        className="text-sm text-link hover:underline font-medium"
+                  <div className="rounded-lg bg-cream border border-beige-deep p-8 max-w-lg w-full text-left">
+                    <p className="text-[11px] font-semibold uppercase tracking-[1px] text-steel mb-5">
+                      Get started in 30 seconds
+                    </p>
+                    <div className="space-y-5">
+                      <div className="flex gap-3">
+                        <span className="shrink-0 w-7 h-7 rounded-full bg-primary text-white flex items-center justify-center text-xs font-semibold">1</span>
+                        <div>
+                          <p className="text-sm font-medium text-ink">Drag this button to your bookmarks bar:</p>
+                          <a
+                            ref={bookmarkletRef}
+                            href="#"
+                            className="mt-2 px-4 py-2 inline-flex items-center gap-2 bg-primary text-white rounded-md text-sm font-medium cursor-grab active:cursor-grabbing"
+                            onClick={(e) => { e.preventDefault(); alert("Drag this button to your bookmarks bar.\nThen click it on the HROne calendar page."); }}
+                          >
+                            Sync Attendance
+                            <span className="text-[10px] opacity-70 font-mono">v{BOOKMARKLET_VERSION}</span>
+                          </a>
+                        </div>
+                      </div>
+                      <div className="flex gap-3">
+                        <span className="shrink-0 w-7 h-7 rounded-full bg-primary text-white flex items-center justify-center text-xs font-semibold">2</span>
+                        <div>
+                          <p className="text-sm font-medium text-ink">
+                            Open{" "}
+                            <a href="https://app.hrone.cloud/app/myprofile/calendar" target="_blank" rel="noopener noreferrer" className="text-link hover:underline">
+                              HROne Calendar
+                            </a>
+                          </p>
+                          <p className="text-xs text-steel mt-0.5">Log in if needed, then select the month you want</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-3">
+                        <span className="shrink-0 w-7 h-7 rounded-full bg-primary text-white flex items-center justify-center text-xs font-semibold">3</span>
+                        <div>
+                          <p className="text-sm font-medium text-ink">Click the bookmark — data appears here</p>
+                          <p className="text-xs text-steel mt-0.5">First time you'll enter your Employee ID (from your HROne profile)</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-6 pt-5 border-t border-beige-deep text-center space-y-2">
+                      <a
+                        href="/attendance-extension.zip"
+                        download="attendance-extension.zip"
+                        className="inline-flex items-center gap-2 px-4 py-2 border border-hairline-strong bg-canvas text-ink rounded-md text-sm font-medium hover:bg-hairline-soft transition-colors"
                       >
-                        {showAllDays ? "Show worked only" : "Show all days"}
-                      </button>
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                        </svg>
+                        Download Extension
+                      </a>
+                      <p className="text-[11px] text-stone">
+                        Unzip → chrome://extensions → Developer mode → Load unpacked
+                      </p>
                     </div>
-                    <div className="rounded-lg border border-hairline overflow-hidden bg-canvas shadow-card">
-                      <DayTable records={tableRecords} />
-                    </div>
-                  </section>
-                )}
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {activeLabel && (
+                    <h2 className="font-display text-3xl font-medium text-ink tracking-display">{activeLabel}</h2>
+                  )}
 
-                {/* Sunset stripe band */}
-                <div className="sunset-stripe h-2 rounded-full mt-12" aria-hidden="true" />
-              </>
-            )}
-          </div>
+                  {enrichedRecords && <YesterdaySummary records={enrichedRecords} allEntries={savedEntries} />}
+                  {dashboardMetrics && <Dashboard metrics={dashboardMetrics} />}
+
+                  {tableRecords && (
+                    <section>
+                      <div className="flex items-center justify-between mb-4">
+                        <p className="text-[11px] font-semibold uppercase tracking-[1px] text-steel">
+                          {showAllDays ? "All Days" : "Worked Days"}
+                        </p>
+                        <button
+                          onClick={() => setShowAllDays(!showAllDays)}
+                          className="text-sm text-link hover:underline font-medium"
+                        >
+                          {showAllDays ? "Show worked only" : "Show all days"}
+                        </button>
+                      </div>
+                      <div className="rounded-lg border border-hairline overflow-hidden bg-canvas shadow-card">
+                        <DayTable records={tableRecords} />
+                      </div>
+                    </section>
+                  )}
+
+                  {/* Sunset stripe band */}
+                  <div className="sunset-stripe h-2 rounded-full mt-12" aria-hidden="true" />
+                </>
+              )}
+            </div>
           )}
         </main>
 
