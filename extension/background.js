@@ -220,13 +220,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 function injectFetchScript(tabId, eid, month, year) {
-  chrome.scripting.executeScript({
-    target: { tabId },
-    func: fetchAttendanceFromHROne,
-    args: [eid, month, year],
-  }).catch((err) => {
-    console.error("[Attendance Interceptor] Background: inject failed:", err.message);
-    notifyAppTabs({ success: false, error: "Failed to connect to HROne: " + err.message });
+  // Send a message to the content script already running on HROne
+  chrome.tabs.sendMessage(tabId, {
+    type: "FETCH_ATTENDANCE_NOW",
+    payload: { employeeId: eid, month, year }
+  }, (response) => {
+    if (chrome.runtime.lastError) {
+      // Content script not ready yet — try scripting API as fallback
+      chrome.scripting.executeScript({
+        target: { tabId },
+        func: fetchAttendanceFromHROne,
+        args: [eid, month, year],
+      }).catch((err) => {
+        console.error("[Attendance Interceptor] Background: inject failed:", err.message);
+        notifyAppTabs({ success: false, error: "Failed to connect to HROne: " + err.message });
+      });
+    } else {
+      console.log("[Attendance Interceptor] Background: content script handling fetch", response);
+    }
   });
 }
 

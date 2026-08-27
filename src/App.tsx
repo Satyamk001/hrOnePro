@@ -21,7 +21,7 @@ const BOOKMARKLET_VERSION_KEY = "attendance-bookmarklet-version";
 const EXTENSION_VERSION = "2.0.0";
 const EXTENSION_VERSION_KEY = "attendance-extension-version";
 const APP_VERSION_KEY = "attendance-app-version";
-const APP_VERSION = "1.3.1"; // Bump this on each release
+const APP_VERSION = "1.4.0"; // Bump this on each release
 interface SavedEntry { label: string; key: string; records: AttendanceRecord[]; }
 
 function deriveMonthKey(records: AttendanceRecord[]): string {

@@ -1,7 +1,7 @@
 {
   "name": "attendance-insights",
   "private": false,
-  "version": "1.3.6",
+  "version": "1.4.0",
   "type": "module",
   "description": "Zero-install attendance analytics dashboard for HROne users. Shows overtime, shortfall, net balance, and daily patterns.",
   "author": "Satyam Kumar",

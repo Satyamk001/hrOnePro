@@ -73,6 +73,7 @@ export interface AggregateMetrics {
   totalDays: number;
   statusCounts: Record<DayStatus, number>;
   totalWorkingMinutes: number;
+  totalHrOneMinutes: number;
   totalExtraMinutes: number;
   totalShortfallMinutes: number;
   averageWorkMinutes: number;

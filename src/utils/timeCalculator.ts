@@ -28,10 +28,16 @@ export function formatMinutes(m: number): string {
  * Compute per-record time metrics from a ClassifiedRecord.
  * Falls back to timeIn/timeout calculation only if calculatedWorkingHours is
  * genuinely missing (no colon, e.g., "0" or empty), NOT if it's "00:00".
+ * For Half Day records, shift duration is halved.
  */
 export function computeRecordMetrics(record: ClassifiedRecord): EnrichedRecord {
-  const shiftDurationMinutes =
+  let shiftDurationMinutes =
     parseHHMM(record.shiftEndTime) - parseHHMM(record.shiftStartTime);
+
+  // Half day: expected shift is half the full shift
+  if (record.status === "Half Day") {
+    shiftDurationMinutes = Math.floor(shiftDurationMinutes / 2);
+  }
 
   let workedMinutes = parseHHMM(record.calculatedWorkingHours);
 
@@ -96,9 +102,11 @@ export function computeAggregateMetrics(
   let totalWorkingMinutes = 0;
   let totalExtraMinutes = 0;
   let totalShortfallMinutes = 0;
+  let totalHrOneMinutes = 0; // Sum of raw calculatedWorkingHours from HROne
 
   for (const day of workedDays) {
     totalWorkingMinutes += day.workedMinutes;
+    totalHrOneMinutes += parseHHMM(day.calculatedWorkingHours);
     if (day.extraDeficitMinutes > 0) {
       totalExtraMinutes += day.extraDeficitMinutes;
     } else if (day.extraDeficitMinutes < 0) {
@@ -194,6 +202,7 @@ export function computeAggregateMetrics(
     totalDays: records.length,
     statusCounts,
     totalWorkingMinutes,
+    totalHrOneMinutes,
     totalExtraMinutes,
     totalShortfallMinutes,
     averageWorkMinutes,

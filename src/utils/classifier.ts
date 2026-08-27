@@ -23,33 +23,34 @@ export function classifyRecord(record: AttendanceRecord): ClassifiedRecord {
   // Late flag is independent of primary classification
   const isLateArrival = record.presentStatus === "Late";
 
-  // 1. isLeave === 1 → "Leave"
-  if (record.isLeave === 1) {
-    return { ...record, status: "Leave", isLateArrival };
-  }
-
-  // 2. Both halves "HO" → "Holiday"
-  if (firstHalf === "HO" && secondHalf === "HO") {
-    return { ...record, status: "Holiday", isLateArrival };
-  }
-
-  // 3. Both halves "WO" → "Week Off"
-  if (firstHalf === "WO" && secondHalf === "WO") {
-    return { ...record, status: "Week Off", isLateArrival };
-  }
-
-  // 4. Both halves "P" → "Present"
-  if (firstHalf === "P" && secondHalf === "P") {
-    return { ...record, status: "Present", isLateArrival };
-  }
-
-  // 5. One half "P", other in {"FL","EL","HD"} → "Half Day"
+  // 1. Check half-day combinations FIRST (one half P + other leave type)
+  //    This takes priority over isLeave flag because isLeave=1 can be set for half-days too
   const halfDayCodes = new Set(["FL", "EL", "HD"]);
   if (
     (firstHalf === "P" && halfDayCodes.has(secondHalf)) ||
     (secondHalf === "P" && halfDayCodes.has(firstHalf))
   ) {
     return { ...record, status: "Half Day", isLateArrival };
+  }
+
+  // 2. isLeave === 1 AND not a half-day → full day leave
+  if (record.isLeave === 1) {
+    return { ...record, status: "Leave", isLateArrival };
+  }
+
+  // 3. Both halves "HO" → "Holiday"
+  if (firstHalf === "HO" && secondHalf === "HO") {
+    return { ...record, status: "Holiday", isLateArrival };
+  }
+
+  // 4. Both halves "WO" → "Week Off"
+  if (firstHalf === "WO" && secondHalf === "WO") {
+    return { ...record, status: "Week Off", isLateArrival };
+  }
+
+  // 5. Both halves "P" → "Present"
+  if (firstHalf === "P" && secondHalf === "P") {
+    return { ...record, status: "Present", isLateArrival };
   }
 
   // 6. Either half "FL", neither "P" → "Flexi Leave"

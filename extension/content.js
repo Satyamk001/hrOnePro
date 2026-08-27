@@ -96,3 +96,79 @@ window.addEventListener("InterceptedTodayPunches", function (event) {
     console.warn("[Attendance Interceptor] content.js: Extension context invalidated for punch send.");
   }
 });
+
+
+// Handle "Sync Now" request from background — fetch attendance directly from this HROne page
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === "FETCH_ATTENDANCE_NOW") {
+    const { employeeId, month, year } = message.payload;
+    console.log("[Attendance Interceptor] content.js: Fetching attendance for", employeeId, month, year);
+
+    const hdrs = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json, text/plain, */*',
+      'domaincode': 'mapmyindia',
+      'accessmode': 'W',
+      'x-requested-with': location.origin,
+      'cache-control': 'no-cache',
+      'pragma': 'no-cache'
+    };
+
+    let profileDone = false;
+    let attendanceDone = false;
+    let punchDone = false;
+
+    // Fetch profile
+    fetch(location.origin + '/api/workforce/Employee/EmployeeInformation/' + employeeId, {
+      method: 'GET', headers: hdrs, credentials: 'include'
+    }).then(r => r.ok ? r.json() : null).then(data => {
+      if (data) {
+        const arr = Array.isArray(data) ? data : [data];
+        const info = arr[0];
+        if (info) {
+          const profile = {
+            employeeId: employeeId,
+            employeeCode: info.employeeCode || '',
+            employeeName: info.employeeName || '',
+            designation: info.designation || '',
+            department: info.department || '',
+            email: info.officialEmail || info.personalEmail || '',
+            phone: info.mobileNo || '',
+            dateOfJoining: info.dateOfJoining || '',
+            reportingManager: info.reportingManager || '',
+            profileImageUrl: info.imageVirtualPath || info.thumbnailFileName || null
+          };
+          try { chrome.runtime.sendMessage({ type: "PROFILE_DATA_INTERCEPTED", payload: { profile } }); } catch(e) {}
+        }
+      }
+    }).catch(() => {}).then(() => { profileDone = true; });
+
+    // Fetch attendance
+    fetch(location.origin + '/api/timeoffice/attendance/Calendar', {
+      method: 'POST', headers: hdrs, credentials: 'include',
+      body: JSON.stringify({ attendanceYear: year, attendanceMonth: month, employeeId: employeeId, calendarViewType: 'C' })
+    }).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+    .then(text => {
+      const data = JSON.parse(text);
+      const records = Array.isArray(data) ? data : (data.data || data.result || []);
+      if (records.length > 0) {
+        try { chrome.runtime.sendMessage({ type: "ATTENDANCE_DATA_INTERCEPTED", payload: { records, sourceUrl: "sync-now" } }); } catch(e) {}
+      }
+    }).catch(err => {
+      console.error("[Attendance Interceptor] content.js: fetch attendance error:", err.message);
+    }).then(() => { attendanceDone = true; });
+
+    // Fetch today's punches
+    const today = new Date().toISOString().split('T')[0];
+    fetch(location.origin + '/api/timeoffice/attendance/RawPunch/' + employeeId + '/' + today + '/true', {
+      method: 'GET', headers: hdrs, credentials: 'include'
+    }).then(r => r.ok ? r.json() : null).then(data => {
+      if (data && Array.isArray(data) && data.length > 0) {
+        try { chrome.runtime.sendMessage({ type: "TODAY_PUNCHES_INTERCEPTED", payload: { punches: data } }); } catch(e) {}
+      }
+    }).catch(() => {}).then(() => { punchDone = true; });
+
+    sendResponse({ success: true });
+    return true;
+  }
+});

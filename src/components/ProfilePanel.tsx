@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import type { EmployeeProfile, EnrichedRecord, TodayAttendance } from "../types";
 import { formatMinutes, parseHHMM } from "../utils/timeCalculator";
 
@@ -66,43 +67,7 @@ export default function ProfilePanel({ profile, yesterdayRecord, todayAttendance
         {todayAttendance ? (
           <div className="rounded-lg border border-hairline bg-canvas p-4">
             <p className="text-[11px] font-semibold uppercase tracking-[1px] text-steel mb-3">Today</p>
-            <div className="space-y-2">
-              <div className="flex justify-between">
-                <span className="text-xs text-steel">First Punch</span>
-                <span className="text-xs font-mono text-ink">{todayAttendance.firstPunch}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-xs text-steel">Last Punch</span>
-                <span className="text-xs font-mono text-ink">{todayAttendance.lastPunch}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-xs text-steel">Worked So Far</span>
-                <span className="text-xs font-mono font-medium text-ink">{formatMinutes(todayAttendance.workedMinutesSoFar)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-xs text-steel">Punches</span>
-                <span className="text-xs text-ink">{todayAttendance.punchCount}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-xs text-steel">Status</span>
-                <span className={`text-xs font-medium ${todayAttendance.isStillIn ? "text-primary" : "text-steel"}`}>
-                  {todayAttendance.isStillIn ? "In Office" : "Left"}
-                </span>
-              </div>
-              <div className="flex justify-between pt-1 border-t border-hairline">
-                <span className="text-xs text-steel">Can leave at</span>
-                <span className="text-xs font-mono font-medium text-primary">
-                  {(() => {
-                    // First punch + 9 hours = earliest leave time
-                    const [h, m] = todayAttendance.firstPunch.split(":").map(Number);
-                    const leaveMinutes = h * 60 + m + 540; // 540 = 9 hours
-                    const leaveH = Math.floor(leaveMinutes / 60);
-                    const leaveM = leaveMinutes % 60;
-                    return `${String(leaveH).padStart(2, "0")}:${String(leaveM).padStart(2, "0")}`;
-                  })()}
-                </span>
-              </div>
-            </div>
+            <TodayAttendanceLive todayAttendance={todayAttendance} />
           </div>
         ) : yesterdayRecord ? (
           <div className="rounded-lg border border-hairline bg-canvas p-4">
@@ -155,6 +120,52 @@ export default function ProfilePanel({ profile, yesterdayRecord, todayAttendance
         ) : null}
       </div>
     </aside>
+  );
+}
+
+function TodayAttendanceLive({ todayAttendance }: { todayAttendance: TodayAttendance }) {
+  const [now, setNow] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 1000); // update every second
+    return () => clearInterval(timer);
+  }, []);
+
+  // Compute worked so far live: from first punch to now
+  const [h, m] = todayAttendance.firstPunch.split(":").map(Number);
+  const firstPunchMinutes = h * 60 + m;
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const workedSoFar = Math.max(0, nowMinutes - firstPunchMinutes);
+
+  // Can leave at: first punch + 9 hours
+  const leaveMinutes = firstPunchMinutes + 540;
+  const leaveH = Math.floor(leaveMinutes / 60);
+  const leaveM = leaveMinutes % 60;
+  const canLeaveAt = `${String(leaveH).padStart(2, "0")}:${String(leaveM).padStart(2, "0")}`;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex justify-between">
+        <span className="text-xs text-steel">First Punch</span>
+        <span className="text-xs font-mono text-ink">{todayAttendance.firstPunch}</span>
+      </div>
+      <div className="flex justify-between">
+        <span className="text-xs text-steel">Last Punch</span>
+        <span className="text-xs font-mono text-ink">{todayAttendance.lastPunch}</span>
+      </div>
+      <div className="flex justify-between">
+        <span className="text-xs text-steel">Worked So Far</span>
+        <span className="text-xs font-mono font-medium text-ink">{formatMinutes(workedSoFar)}</span>
+      </div>
+      <div className="flex justify-between">
+        <span className="text-xs text-steel">Punches</span>
+        <span className="text-xs text-ink">{todayAttendance.punchCount}</span>
+      </div>
+      <div className="flex justify-between pt-1 border-t border-hairline">
+        <span className="text-xs text-steel">Can leave at</span>
+        <span className="text-xs font-mono font-medium text-primary">{canLeaveAt}</span>
+      </div>
+    </div>
   );
 }
 

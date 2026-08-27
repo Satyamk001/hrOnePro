@@ -47,6 +47,9 @@ export default function Dashboard({ metrics }: DashboardProps) {
           <div>
             <p className="text-[11px] text-steel uppercase tracking-wide">Total Hours</p>
             <p className="text-sm font-medium text-ink mt-0.5">{formatMinutes(metrics.totalWorkingMinutes)}</p>
+            {metrics.totalHrOneMinutes !== metrics.totalWorkingMinutes && (
+              <p className="text-[10px] text-stone mt-0.5">HROne: {formatMinutes(metrics.totalHrOneMinutes)}</p>
+            )}
           </div>
         </div>
       </div>
