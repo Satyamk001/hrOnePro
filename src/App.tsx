@@ -22,10 +22,10 @@ const USER_KEY = "attendance-insights-user";
 const PROFILE_KEY = "attendance-insights-profile";
 const BOOKMARKLET_VERSION = "3";
 const BOOKMARKLET_VERSION_KEY = "attendance-bookmarklet-version";
-const EXTENSION_VERSION = "2.0.0";
+const EXTENSION_VERSION = "2.1.0";
 const EXTENSION_VERSION_KEY = "attendance-extension-version";
 const APP_VERSION_KEY = "attendance-app-version";
-const APP_VERSION = "1.4.0"; // Bump this on each release
+const APP_VERSION = "1.5.0"; // Bump this on each release
 interface SavedEntry { label: string; key: string; records: AttendanceRecord[]; }
 
 function deriveMonthKey(records: AttendanceRecord[]): string {
@@ -521,13 +521,24 @@ function App() {
     }
     localStorage.setItem("attendance-empId", String(empId));
     const now = new Date();
+    // Sync the month currently selected in the sidebar (activeKey is "YYYY-MM").
+    // Fall back to the current month when nothing is selected (first-time user).
+    let syncMonth = now.getMonth() + 1;
+    let syncYear = now.getFullYear();
+    if (activeKey) {
+      const [y, m] = activeKey.split("-").map(Number);
+      if (!Number.isNaN(y) && !Number.isNaN(m)) {
+        syncYear = y;
+        syncMonth = m;
+      }
+    }
     setSyncing(true);
     window.dispatchEvent(new CustomEvent("RequestAttendanceSync", {
-      detail: { employeeId: empId, month: now.getMonth() + 1, year: now.getFullYear() }
+      detail: { employeeId: empId, month: syncMonth, year: syncYear }
     }));
     // Timeout fallback — if no response in 15s
     setTimeout(() => setSyncing(false), 15000);
-  }, [employeeProfile, savedEntries]);
+  }, [employeeProfile, savedEntries, activeKey]);
 
   useEffect(() => {
     const h = (event: MessageEvent) => {
@@ -625,10 +636,12 @@ function App() {
               orbSize={24}
               onToggle={() => {
                 const html = document.documentElement;
+                html.classList.add("theme-transitioning");
                 const newDark = !isDark;
                 if (newDark) { html.classList.add("dark"); } else { html.classList.remove("dark"); }
                 localStorage.setItem("theme", newDark ? "dark" : "light");
                 setIsDark(newDark);
+                setTimeout(() => html.classList.remove("theme-transitioning"), 500);
               }}
             />
 
@@ -641,10 +654,10 @@ function App() {
               onClick={handleSyncNow}
               disabled={syncing || !extensionAvailable}
               loading={syncing}
-              title={extensionAvailable ? "Fetch latest data from HROne" : "Install the extension to use Sync"}
+              title={extensionAvailable ? (activeLabel ? `Sync ${activeLabel} from HROne` : "Fetch latest data from HROne") : "Install the extension to use Sync"}
               text="Sync"
               width={110}
-              height={30}
+              height={40}
             />
           </div>
 

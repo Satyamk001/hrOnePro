@@ -114,11 +114,17 @@ export function computeAggregateMetrics(
     }
   }
 
-  // Average work minutes (floor division, 0 if no worked days)
-  // Exclude days with 0 worked minutes from average (unprocessed days)
+  // Average work minutes — shift-weighted so a Half Day counts as 0.5 of a day.
+  // This prevents a short half-day (e.g. 4h40m) from dragging down the per-day
+  // pace, which is measured against a full 9h shift.
+  // Exclude days with 0 worked minutes from the average (unprocessed days).
   const daysWithHours = workedDays.filter((d) => d.workedMinutes > 0);
+  const effectiveDayCount = daysWithHours.reduce(
+    (sum, d) => sum + (d.status === "Half Day" ? 0.5 : 1),
+    0
+  );
   const averageWorkMinutes =
-    daysWithHours.length > 0 ? Math.floor(totalWorkingMinutes / daysWithHours.length) : 0;
+    effectiveDayCount > 0 ? Math.floor(totalWorkingMinutes / effectiveDayCount) : 0;
 
   // Late count: records where isLateArrival is true (among worked days)
   const lateCount = workedDays.filter((r) => r.isLateArrival).length;

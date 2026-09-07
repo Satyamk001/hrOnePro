@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Attendance Interceptor",
-  "version": "1.1.0",
+  "version": "2.1.0",
   "description": "Auto-syncs HROne attendance data to the Attendance Insights dashboard",
   "permissions": [
     "storage",
@@ -11,7 +11,11 @@
   "host_permissions": [
     "https://app.hrone.cloud/*",
     "http://localhost/*",
+    "http://localhost:*/*",
+    "http://127.0.0.1:*/*",
     "http://*/*",
+    "https://hronepro.vercel.app/*",
+    "https://*.vercel.app/*",
     "https://*.ngrok-free.dev/*",
     "https://*.ngrok-free.app/*"
   ],
@@ -25,7 +29,19 @@
       "run_at": "document_start"
     },
     {
-      "matches": ["http://localhost/*", "http://10.10.22.12/*", "https://*.ngrok-free.app/*", "https://*.ngrok-free.dev/*", "https://*.ngrok.io/*"],
+      "matches": [
+        "http://localhost/*",
+        "http://localhost:*/*",
+        "http://127.0.0.1/*",
+        "http://127.0.0.1:*/*",
+        "http://10.10.22.12/*",
+        "http://10.10.22.12:*/*",
+        "https://hronepro.vercel.app/*",
+        "https://*.vercel.app/*",
+        "https://*.ngrok-free.app/*",
+        "https://*.ngrok-free.dev/*",
+        "https://*.ngrok.io/*"
+      ],
       "js": ["receiver.js"],
       "run_at": "document_idle"
     }

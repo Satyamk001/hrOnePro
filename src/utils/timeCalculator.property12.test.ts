@@ -160,9 +160,13 @@ describe('Property 12: Aggregate totals correctness', () => {
         );
 
         // Compute per-record extra/deficit and sum positives
+        // Half Day records use half the shift duration
         const expectedExtraMinutes = workedDays.reduce((sum, r) => {
-          const shiftDuration =
+          let shiftDuration =
             parseHHMM(r.shiftEndTime) - parseHHMM(r.shiftStartTime);
+          if (r.status === 'Half Day') {
+            shiftDuration = Math.floor(shiftDuration / 2);
+          }
           const worked = parseHHMM(r.calculatedWorkingHours);
           const extraDeficit = worked - shiftDuration;
           return extraDeficit > 0 ? sum + extraDeficit : sum;
@@ -185,9 +189,13 @@ describe('Property 12: Aggregate totals correctness', () => {
         );
 
         // Compute per-record extra/deficit and sum absolute negatives
+        // Half Day records use half the shift duration
         const expectedShortfallMinutes = workedDays.reduce((sum, r) => {
-          const shiftDuration =
+          let shiftDuration =
             parseHHMM(r.shiftEndTime) - parseHHMM(r.shiftStartTime);
+          if (r.status === 'Half Day') {
+            shiftDuration = Math.floor(shiftDuration / 2);
+          }
           const worked = parseHHMM(r.calculatedWorkingHours);
           const extraDeficit = worked - shiftDuration;
           return extraDeficit < 0 ? sum + Math.abs(extraDeficit) : sum;

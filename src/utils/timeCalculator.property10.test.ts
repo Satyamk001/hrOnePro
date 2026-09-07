@@ -90,8 +90,12 @@ describe('Property 10: Extra/deficit computation correctness', () => {
         const result = computeRecordMetrics(record);
 
         const expectedWorkedMinutes = parseHHMM(record.calculatedWorkingHours);
-        const expectedShiftDuration =
+        let expectedShiftDuration =
           parseHHMM(record.shiftEndTime) - parseHHMM(record.shiftStartTime);
+        // Half Day records use half the shift duration
+        if (record.status === 'Half Day') {
+          expectedShiftDuration = Math.floor(expectedShiftDuration / 2);
+        }
         const expectedExtraDeficit = expectedWorkedMinutes - expectedShiftDuration;
 
         expect(result.extraDeficitMinutes).toBe(expectedExtraDeficit);
