@@ -28,12 +28,12 @@ export function SplashButton({
   disabled,
   loading,
   title,
-  width = 220,
+  width = 250,
   height = 80,
 }: SplashButtonProps) {
   const uid = React.useId().replace(/:/g, "");
   const chars = text.split("");
-  const scale = width / 220;
+  const scale = width / 250;
 
   return (
     <div
@@ -56,7 +56,7 @@ export function SplashButton({
             letter-spacing: -0.5px;
             border: 0;
             position: relative;
-            width: 220px;
+            width: 250px;
             height: 80px;
         }
 
@@ -71,7 +71,7 @@ export function SplashButton({
             border-radius: inherit;
             overflow: hidden;
             height: 72%;
-            padding: 13px;
+            padding: 30px;
             background: linear-gradient(to bottom, var(--accent) 0%, var(--bg) 100%);
             position: relative;
             transition: all 0.3s ease;
@@ -119,7 +119,7 @@ export function SplashButton({
             inset: 0;
             position: absolute;
             z-index: 10;
-            width: 80%;
+            width: 100%;
             top: 45%;
             bottom: 35%;
             opacity: 0.7;
@@ -302,7 +302,7 @@ export function SplashButton({
         </svg>
 
         <div className="sb-wrap">
-          <svg className="sb-path" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 221 42" height="42" width="221">
+          <svg className="sb-path" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 221 42" height="42" width="250">
             <path strokeLinecap="round" strokeWidth="3" d="M182.674 2H203C211.837 2 219 9.16344 219 18V24C219 32.8366 211.837 40 203 40H18C9.16345 40 2 32.8366 2 24V18C2 9.16344 9.16344 2 18 2H47.8855" />
           </svg>
 

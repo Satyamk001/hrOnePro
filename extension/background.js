@@ -15,6 +15,7 @@ const APP_URL_PATTERNS = [
   "http://localhost",
   "http://127.0.0.1",
   "http://10.10.22.12",
+  "https://hronepro.vercel.app",
 ];
 
 function isAppTab(tab) {
@@ -139,8 +140,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // When any http tab completes loading and looks like our app, send pending data
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === "complete" && isAppTab(tab)) {
-    // Inject receiver.js if this isn't a localhost tab (those get it from manifest)
-    if (!tab.url.startsWith("http://localhost") && !tab.url.startsWith("http://127.0.0.1")) {
+    // Domains already covered by the manifest content_scripts get receiver.js
+    // injected declaratively — skip programmatic injection for those to avoid
+    // double-loading. Only inject for tabs matched by the title fallback
+    // (e.g. arbitrary LAN IPs the manifest can't enumerate).
+    const manifestCovered =
+      tab.url.startsWith("http://localhost") ||
+      tab.url.startsWith("http://127.0.0.1") ||
+      tab.url.startsWith("http://10.10.22.12") ||
+      /^https:\/\/[^/]*\.vercel\.app/.test(tab.url) ||
+      /^https:\/\/[^/]*\.ngrok(-free)?\.(app|dev|io)/.test(tab.url);
+    if (!manifestCovered) {
       chrome.scripting.executeScript({
         target: { tabId },
         files: ["receiver.js"],

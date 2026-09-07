@@ -22,7 +22,7 @@ const USER_KEY = "attendance-insights-user";
 const PROFILE_KEY = "attendance-insights-profile";
 const BOOKMARKLET_VERSION = "3";
 const BOOKMARKLET_VERSION_KEY = "attendance-bookmarklet-version";
-const EXTENSION_VERSION = "2.1.0";
+const EXTENSION_VERSION = "2.2.0";
 const EXTENSION_VERSION_KEY = "attendance-extension-version";
 const APP_VERSION_KEY = "attendance-app-version";
 const APP_VERSION = "1.5.0"; // Bump this on each release
@@ -656,7 +656,7 @@ function App() {
               loading={syncing}
               title={extensionAvailable ? (activeLabel ? `Sync ${activeLabel} from HROne` : "Fetch latest data from HROne") : "Install the extension to use Sync"}
               text="Sync"
-              width={110}
+              width={130}
               height={40}
             />
           </div>

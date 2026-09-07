@@ -139,19 +139,15 @@ export function GlassToggle({
     >
       {/* Background Capsule - The Track */}
       <div
-        className="absolute rounded-full transition-all duration-700 ease-out border border-white/10"
+        className="absolute rounded-full transition-all duration-700 ease-out "
         style={{
           left: trackInsetX,
           right: trackInsetX,
           top: trackInsetY,
           bottom: trackInsetY,
           background: isDark ? trackDark : trackLight,
-          backdropFilter: "blur(12px)",
-          boxShadow: `
-                inset 1px 1px 2px rgba(255, 255, 255, 0.2),
-                inset -1px -1px 2px rgba(0, 0, 0, 0.3),
-                0 ${height * 0.1}px ${height * 0.4}px -${height * 0.1}px rgba(0,0,0,0.4)
-            `,
+          // backdropFilter: "blur(12px)",
+         
         }}
       ></div>
 
@@ -218,7 +214,7 @@ export function GlassToggle({
             background:
               "linear-gradient(145deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 40%, rgba(255,255,255,0.0) 100%)",
             backdropFilter: "blur(5px)",
-            border: "1px solid rgba(255,255,255,0.3)",
+            // border: "1px solid rgba(255,255,255,0.3)",
             boxShadow: `
                     inset ${orbSize * 0.04}px ${orbSize * 0.04}px ${orbSize * 0.1}px rgba(255,255,255,0.3),
                     inset -${orbSize * 0.04}px -${orbSize * 0.04}px ${orbSize * 0.1}px rgba(0,0,0,0.1),

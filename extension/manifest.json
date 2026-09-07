@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Attendance Interceptor",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Auto-syncs HROne attendance data to the Attendance Insights dashboard",
   "permissions": [
     "storage",
