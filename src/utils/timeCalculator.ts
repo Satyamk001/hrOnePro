@@ -206,6 +206,10 @@ export function computeAggregateMetrics(
 
   return {
     totalDays: records.length,
+    scheduledWorkingDays:
+      records.length -
+      statusCounts["Week Off"] -
+      statusCounts["Holiday"],
     statusCounts,
     totalWorkingMinutes,
     totalHrOneMinutes,

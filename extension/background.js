@@ -197,12 +197,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     // Find an existing HROne tab or create one
-    chrome.tabs.query({ url: "https://app.hrone.cloud/*" }, (hroneTabs) => {
-      if (hroneTabs.length > 0) {
-        // Use existing tab — inject fetch script
-        const tabId = hroneTabs[0].id;
+    chrome.tabs.query({ url: "https://*.hrone.cloud/*" }, (hroneTabs) => {
+      // Prefer a tab that's actually on the app (not a login/SSO page)
+      const appTab = hroneTabs.find((t) => t.url && t.url.startsWith("https://app.hrone.cloud/"));
+      if (appTab) {
+        // Use existing app tab — inject fetch script
+        const tabId = appTab.id;
         console.log("[Attendance Interceptor] Background: Using existing HROne tab", tabId);
         injectFetchScript(tabId, eid, m, y);
+      } else if (hroneTabs.length > 0) {
+        // An HROne tab exists but it's on a login/SSO/other page — user likely
+        // isn't logged into the app yet.
+        notifyAppTabs({
+          success: false,
+          error: "Please log into HROne (app.hrone.cloud), then try Sync again.",
+        });
       } else {
         // Open HROne in background — user must be logged in
         console.log("[Attendance Interceptor] Background: Opening HROne tab...");
@@ -243,7 +252,15 @@ function injectFetchScript(tabId, eid, month, year) {
         args: [eid, month, year],
       }).catch((err) => {
         console.error("[Attendance Interceptor] Background: inject failed:", err.message);
-        notifyAppTabs({ success: false, error: "Failed to connect to HROne: " + err.message });
+        // Translate Chrome's cryptic host-permission error into a clear,
+        // actionable message. This happens when the HROne tab has navigated
+        // to a login/SSO page (a host the extension can't script), which
+        // usually means the user's session expired or HROne was slow.
+        const msg = err.message || "";
+        const friendly = /Cannot access contents of the page|must request permission/i.test(msg)
+          ? "Please log into HROne (app.hrone.cloud), then try Sync again."
+          : "Couldn't reach HROne. Make sure you're logged in and try again.";
+        notifyAppTabs({ success: false, error: friendly });
       });
     } else {
       console.log("[Attendance Interceptor] Background: content script handling fetch", response);

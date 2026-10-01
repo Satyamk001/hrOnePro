@@ -56,7 +56,7 @@ export default function Dashboard({ metrics }: DashboardProps) {
 
       {/* Metrics grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Cell label="Worked Days" value={String(metrics.workedDayCount)} sub={`of ${metrics.totalDays} days in month`} />
+        <Cell label="Worked Days" value={String(metrics.workedDayCount)} sub={`of ${metrics.scheduledWorkingDays} working days`} />
         <Cell label="Present" value={String(metrics.statusCounts["Present"])} />
         <Cell label="Late" value={`${metrics.lateCount}`} sub={`${metrics.latePercentage.toFixed(1)}% of worked days`} />
         <Cell label="Week Off" value={String(metrics.statusCounts["Week Off"])} />

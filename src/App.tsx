@@ -20,9 +20,10 @@ import AnimatedCounter from "./components/ui/AnimatedCounter";
 const STORAGE_KEY = "attendance-insights-data";
 const USER_KEY = "attendance-insights-user";
 const PROFILE_KEY = "attendance-insights-profile";
+const TODAY_KEY = "attendance-insights-today";
 const BOOKMARKLET_VERSION = "3";
 const BOOKMARKLET_VERSION_KEY = "attendance-bookmarklet-version";
-const EXTENSION_VERSION = "2.2.0";
+const EXTENSION_VERSION = "2.3.0";
 const EXTENSION_VERSION_KEY = "attendance-extension-version";
 const APP_VERSION_KEY = "attendance-app-version";
 const APP_VERSION = "1.5.0"; // Bump this on each release
@@ -242,7 +243,21 @@ function App() {
   const [lastSynced, setLastSynced] = useState<string | null>(() => localStorage.getItem("attendance-last-synced"));
   const [extensionAvailable, setExtensionAvailable] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  const [todayAttendance, setTodayAttendance] = useState<TodayAttendance | null>(null);
+  const [todayAttendance, setTodayAttendance] = useState<TodayAttendance | null>(() => {
+    // Rehydrate today's punches from the last successful sync — but only if the
+    // stored data is actually for today, so stale punches from a previous day
+    // don't linger. This keeps the "Today" card visible even when HROne is slow
+    // or the page is reloaded before a fresh sync completes.
+    try {
+      const raw = localStorage.getItem(TODAY_KEY);
+      if (!raw) return null;
+      const stored = JSON.parse(raw) as TodayAttendance;
+      const todayStr = new Date().toISOString().split("T")[0];
+      return stored.date === todayStr ? stored : null;
+    } catch {
+      return null;
+    }
+  });
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [hasUpdate, setHasUpdate] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
@@ -444,14 +459,17 @@ function App() {
           // Still in if odd number of punches
           const isStillIn = punches.length % 2 !== 0;
 
-          setTodayAttendance({
+          const todayData: TodayAttendance = {
             date: firstPunch.split("T")[0],
             firstPunch: firstTime.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }),
             lastPunch: lastTime.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }),
             punchCount: punches.length,
             workedMinutesSoFar,
             isStillIn,
-          });
+          };
+          setTodayAttendance(todayData);
+          // Persist so the "Today" card survives reloads and HROne slowness
+          try { localStorage.setItem(TODAY_KEY, JSON.stringify(todayData)); } catch { /* ignore */ }
         }
       }
     };

@@ -71,6 +71,8 @@ export interface RecordMetrics {
  */
 export interface AggregateMetrics {
   totalDays: number;
+  /** Scheduled working days = totalDays − Week Off − Holiday */
+  scheduledWorkingDays: number;
   statusCounts: Record<DayStatus, number>;
   totalWorkingMinutes: number;
   totalHrOneMinutes: number;
