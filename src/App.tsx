@@ -40,6 +40,10 @@ const EXTENSION_VERSION_KEY = "attendance-extension-version";
 const APP_VERSION_KEY = "attendance-app-version";
 const APP_VERSION = __APP_VERSION__; // from package.json via vite define
 const SYNC_TIMEOUT_MS = 15000;
+const STALE_FAILURE_WINDOW_MS = 30000;
+// Module-level so React StrictMode's double-invoked effects (dev) and
+// remounts can't fire two auto-syncs that race each other in the extension.
+let autoSyncRequested = false;
 interface SavedEntry { label: string; key: string; records: AttendanceRecord[]; }
 
 function deriveMonthKey(records: AttendanceRecord[]): string {
@@ -248,6 +252,9 @@ function App() {
   const [extensionAvailable, setExtensionAvailable] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const syncingRef = useRef(false);
+  // When records last arrived. A failure status that arrives right after a
+  // success comes from a duplicate/overlapping request and must not show an error.
+  const lastDataAtRef = useRef(0);
   const syncTimeoutRef = useRef<number | undefined>(undefined);
   const [syncError, setSyncError] = useState<string | null>(null);
   // Previous version of a month that a re-sync just shrank — offered as Undo.
@@ -505,6 +512,7 @@ function App() {
       showToast(`Synced ${label} — ${normalized.length} days`);
     }
     setSyncError(null);
+    lastDataAtRef.current = Date.now();
     finishSync();
     // Receiving data from the extension is proof it's installed and active.
     // The AttendanceExtensionReady signal can be missed on load (e.g. when the
@@ -577,7 +585,15 @@ function App() {
           localStorage.setItem("attendance-empId", String(empId));
         }
       }
-      if (empId) {
+      if (empId && !autoSyncRequested) {
+        autoSyncRequested = true;
+        syncingRef.current = true;
+        setSyncing(true);
+        window.clearTimeout(syncTimeoutRef.current);
+        syncTimeoutRef.current = window.setTimeout(() => {
+          syncingRef.current = false;
+          setSyncing(false);
+        }, SYNC_TIMEOUT_MS);
         const now = new Date();
         window.dispatchEvent(new CustomEvent("RequestAttendanceSync", {
           detail: { employeeId: empId, month: now.getMonth() + 1, year: now.getFullYear() }
@@ -614,7 +630,11 @@ function App() {
     const h = (event: Event) => {
       const e = event as CustomEvent<{ success: boolean; error?: string }>;
       if (e.detail && !e.detail.success) {
-        setSyncError(e.detail.error || "HROne didn't return any data.");
+        if (Date.now() - lastDataAtRef.current < STALE_FAILURE_WINDOW_MS) {
+          console.info("[Attendance] Ignoring sync failure from an overlapping request:", e.detail.error);
+        } else {
+          setSyncError(e.detail.error || "HROne didn't return any data.");
+        }
       }
       finishSync();
     };
@@ -663,6 +683,8 @@ function App() {
 
   // Sync Now handler
   const handleSyncNow = useCallback(() => {
+    // One request at a time — overlapping requests race over the same HROne tab.
+    if (syncingRef.current) return;
     const empId = resolveEmpId();
     if (!empId) { setEmpIdDialogOpen(true); return; }
     startSync(empId);

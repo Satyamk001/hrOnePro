@@ -328,11 +328,17 @@ function injectFetchScript(tabId, eid, month, year) {
         args: [eid, month, year],
       }).catch((err) => {
         console.error("[Attendance Interceptor] Background: inject failed:", err.message);
+        const msg = err.message || "";
+        // The tab is gone — typically a concurrent sync already delivered the
+        // data and closed its background tab. Not a user-facing failure.
+        if (/No tab with id|tab was closed|Frame with ID 0 was removed/i.test(msg)) {
+          console.log("[Attendance Interceptor] Background: tab closed before inject; ignoring");
+          return;
+        }
         // Translate Chrome's cryptic host-permission error into a clear,
         // actionable message. This happens when the HROne tab has navigated
         // to a login/SSO page (a host the extension can't script), which
         // usually means the user's session expired or HROne was slow.
-        const msg = err.message || "";
         const friendly = /Cannot access contents of the page|must request permission/i.test(msg)
           ? "Please log into HROne (app.hrone.cloud), then try Sync again."
           : "Couldn't reach HROne. Make sure you're logged in and try again.";
