@@ -21,12 +21,12 @@ const STORAGE_KEY = "attendance-insights-data";
 const USER_KEY = "attendance-insights-user";
 const PROFILE_KEY = "attendance-insights-profile";
 const TODAY_KEY = "attendance-insights-today";
-const BOOKMARKLET_VERSION = "3";
+const BOOKMARKLET_VERSION = "5";
 const BOOKMARKLET_VERSION_KEY = "attendance-bookmarklet-version";
-const EXTENSION_VERSION = "2.3.0";
+const EXTENSION_VERSION = "2.6.0";
 const EXTENSION_VERSION_KEY = "attendance-extension-version";
 const APP_VERSION_KEY = "attendance-app-version";
-const APP_VERSION = "1.5.0"; // Bump this on each release
+const APP_VERSION = "1.6.0"; // Bump this on each release
 interface SavedEntry { label: string; key: string; records: AttendanceRecord[]; }
 
 function deriveMonthKey(records: AttendanceRecord[]): string {
@@ -50,6 +50,48 @@ function formatMonthLabel(key: string): string {
 
 function normalizeRecords(records: AttendanceRecord[]): AttendanceRecord[] {
   return records.map((r) => ({ ...r, attendanceDate: r.attendanceDate.split("T")[0] }));
+}
+
+/**
+ * Derive today's live attendance from raw HROne punches. Shared by both the
+ * extension (TodayPunchesFromExtension event) and the bookmarklet (postMessage
+ * with todayPunches) so the "Today" card behaves identically for both paths.
+ * Returns null when there are no usable punches for today.
+ */
+function deriveTodayAttendance(rawPunches: RawPunch[]): TodayAttendance | null {
+  if (!Array.isArray(rawPunches) || rawPunches.length === 0) return null;
+  const punches = rawPunches
+    .filter((p) => !p.isPunchExcluded)
+    .sort((a, b) => a.punchDateTime.localeCompare(b.punchDateTime));
+  if (punches.length === 0) return null;
+
+  const firstPunch = punches[0].punchDateTime;
+  const lastPunch = punches[punches.length - 1].punchDateTime;
+  const firstTime = new Date(firstPunch);
+  const lastTime = new Date(lastPunch);
+  const now = new Date();
+  // Only treat these as "today" if the punches are from today — compared in
+  // LOCAL time, not UTC. HROne punch timestamps read as the user's local day;
+  // a UTC comparison wrongly rejects valid punches near the day boundary
+  // (e.g. evening in IST is already the next day in UTC).
+  const localDate = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const date = localDate(firstTime);
+  if (date !== localDate(now)) return null;
+  // Worked so far = from first punch to now (regardless of punch count)
+  const workedMs = now.getTime() - firstTime.getTime();
+  const workedMinutesSoFar = Math.max(0, Math.floor(workedMs / 60000));
+  // Still "in" when there's an odd number of punches
+  const isStillIn = punches.length % 2 !== 0;
+
+  return {
+    date,
+    firstPunch: firstTime.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }),
+    lastPunch: lastTime.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }),
+    punchCount: punches.length,
+    workedMinutesSoFar,
+    isStillIn,
+  };
 }
 
 function loadSavedEntries(): SavedEntry[] {
@@ -414,6 +456,12 @@ function App() {
     setToast(`Synced ${label} — ${normalized.length} days`);
     setTimeout(() => setToast(null), 3000);
     setSyncing(false);
+    // Receiving data from the extension is proof it's installed and active.
+    // The AttendanceExtensionReady signal can be missed on load (e.g. when the
+    // extension is reloaded while this tab is already open, or injected
+    // programmatically for a non-manifest host), which would otherwise leave
+    // the Sync button disabled even though sync just succeeded.
+    setExtensionAvailable(true);
   }, []);
 
   useEffect(() => {
@@ -443,34 +491,11 @@ function App() {
   useEffect(() => {
     const h = (event: Event) => {
       const e = event as CustomEvent<{ punches: RawPunch[] }>;
-      if (e.detail?.punches && e.detail.punches.length > 0) {
-        const punches = e.detail.punches
-          .filter(p => !p.isPunchExcluded)
-          .sort((a, b) => a.punchDateTime.localeCompare(b.punchDateTime));
-        if (punches.length > 0) {
-          const firstPunch = punches[0].punchDateTime;
-          const lastPunch = punches[punches.length - 1].punchDateTime;
-          const firstTime = new Date(firstPunch);
-          const lastTime = new Date(lastPunch);
-          const now = new Date();
-          // Worked so far = from first punch to now (regardless of how many punches)
-          const workedMs = now.getTime() - firstTime.getTime();
-          const workedMinutesSoFar = Math.max(0, Math.floor(workedMs / 60000));
-          // Still in if odd number of punches
-          const isStillIn = punches.length % 2 !== 0;
-
-          const todayData: TodayAttendance = {
-            date: firstPunch.split("T")[0],
-            firstPunch: firstTime.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }),
-            lastPunch: lastTime.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }),
-            punchCount: punches.length,
-            workedMinutesSoFar,
-            isStillIn,
-          };
-          setTodayAttendance(todayData);
-          // Persist so the "Today" card survives reloads and HROne slowness
-          try { localStorage.setItem(TODAY_KEY, JSON.stringify(todayData)); } catch { /* ignore */ }
-        }
+      const todayData = deriveTodayAttendance(e.detail?.punches ?? []);
+      if (todayData) {
+        setTodayAttendance(todayData);
+        // Persist so the "Today" card survives reloads and HROne slowness
+        try { localStorage.setItem(TODAY_KEY, JSON.stringify(todayData)); } catch { /* ignore */ }
       }
     };
     window.addEventListener("TodayPunchesFromExtension", h);
@@ -479,7 +504,10 @@ function App() {
 
   // Detect extension availability
   useEffect(() => {
+    let readyHandled = false;
     const onReady = () => {
+      if (readyHandled) return;
+      readyHandled = true;
       setExtensionAvailable(true);
       // Auto-sync on page load if employee ID exists
       let empId = parseInt(localStorage.getItem("attendance-empId") || "0");
@@ -502,7 +530,24 @@ function App() {
     if ((window as unknown as { __attendanceExtensionReady?: boolean }).__attendanceExtensionReady) {
       onReady();
     }
-    return () => window.removeEventListener("AttendanceExtensionReady", onReady);
+    // Belt-and-suspenders: receiver.js may set the flag slightly after this
+    // effect runs (programmatic injection on non-manifest hosts, or a reload
+    // race). Poll briefly so a late flag still enables the button, even if the
+    // one-shot event was missed. Stops as soon as it's detected.
+    let polls = 0;
+    const poll = window.setInterval(() => {
+      polls++;
+      if ((window as unknown as { __attendanceExtensionReady?: boolean }).__attendanceExtensionReady) {
+        onReady();
+        window.clearInterval(poll);
+      } else if (polls >= 20) {
+        window.clearInterval(poll);
+      }
+    }, 250);
+    return () => {
+      window.removeEventListener("AttendanceExtensionReady", onReady);
+      window.clearInterval(poll);
+    };
   }, []);
 
   // Listen for sync status from extension
@@ -573,6 +618,16 @@ function App() {
         if (event.data.v) {
           localStorage.setItem(BOOKMARKLET_VERSION_KEY, event.data.v);
         }
+        // Today's live attendance (bookmarklet parity with the extension).
+        // Without this, todayAttendance stays null and the ProfilePanel always
+        // shows "Last Working Day" even when today's punches exist in HROne.
+        if (Array.isArray(event.data.todayPunches)) {
+          const todayData = deriveTodayAttendance(event.data.todayPunches);
+          if (todayData) {
+            setTodayAttendance(todayData);
+            try { localStorage.setItem(TODAY_KEY, JSON.stringify(todayData)); } catch { /* ignore */ }
+          }
+        }
       }
     };
     window.addEventListener("message", h);
@@ -600,6 +655,29 @@ function App() {
     return result ? result.record : null;
   }, [enrichedRecords, savedEntries]);
 
+  // Today's record straight from the Calendar data (today's row is included in
+  // the monthly records). This is the fallback source for the "Today" card when
+  // there's no live RawPunch data (e.g. the bookmarklet path, or before punches
+  // load). Prefer the live `todayAttendance` when available since it updates
+  // intraday; otherwise synthesize a TodayAttendance from today's record.
+  const effectiveTodayAttendance = useMemo<TodayAttendance | null>(() => {
+    if (todayAttendance) return todayAttendance;
+    if (!enrichedRecords) return null;
+    const now = new Date();
+    const localToday = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const rec = enrichedRecords.find((r) => r.attendanceDate === localToday);
+    // Only show a Today card if the person actually punched in today.
+    if (!rec || !rec.timeIn) return null;
+    return {
+      date: localToday,
+      firstPunch: rec.timeIn,
+      lastPunch: rec.timeout ?? rec.timeIn,
+      punchCount: rec.timeout ? 2 : 1,
+      workedMinutesSoFar: rec.workedMinutes,
+      isStillIn: !rec.timeout,
+    };
+  }, [todayAttendance, enrichedRecords]);
+
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-canvas relative">
       {/* Glassmorphism Three-Pill Navigation */}
@@ -620,7 +698,7 @@ function App() {
 
           {/* Pill 2 — Time / Status (Center) */}
           <div className="glass-pill clock-pill">
-            <LiveClock todayAttendance={todayAttendance} />
+            <LiveClock todayAttendance={effectiveTodayAttendance} />
           </div>
 
           {/* Pill 3 — Actions (Right) */}
@@ -773,9 +851,9 @@ function App() {
           {showPrivacy ? (
             <PrivacyPage onBack={() => setShowPrivacy(false)} />
           ) : (
-            <div className="px-8 py-8 space-y-8 max-w-[1280px]">
+            <div className="px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-8 max-w-[1280px]">
               {(!attendanceData || showOnboarding) ? (
-                <div className="flex flex-col items-center justify-center py-20 text-center">
+                <div className="flex flex-col items-center justify-center py-12 sm:py-16 lg:py-20 text-center">
                   {showOnboarding && attendanceData && (
                     <button
                       onClick={() => { setShowOnboarding(false); setHasUpdate(false); }}
@@ -785,32 +863,32 @@ function App() {
                     </button>
                   )}
                   {hasUpdate && (
-                    <div className="mb-6 px-5 py-3 rounded-lg bg-cream border border-beige-deep text-sm text-charcoal">
+                    <div className="mb-6 px-5 py-3 rounded-lg bg-cream border border-beige-deep text-sm text-charcoal max-w-lg w-full leading-relaxed">
                       <strong className="text-ink">Update available!</strong> Download the latest extension (v{EXTENSION_VERSION}) and re-drag the bookmarklet (v{BOOKMARKLET_VERSION}).
                     </div>
                   )}
-                  <div className="mb-10">
-                    <h2 className="font-display text-4xl font-medium text-ink tracking-display mb-3">
+                  <div className="mb-8 sm:mb-10 px-1">
+                    <h2 className="font-display text-[2rem] leading-[1.1] sm:text-4xl font-medium text-ink tracking-display mb-3 text-balance">
                       Know your hours in seconds
                     </h2>
-                    <p className="text-base text-slate max-w-md leading-relaxed">
+                    <p className="text-[15px] sm:text-base text-slate max-w-md mx-auto leading-relaxed">
                       See overtime, shortfall, and net balance from your HROne attendance — no manual calculation needed.
                     </p>
                   </div>
 
-                  <div className="rounded-lg bg-cream border border-beige-deep p-8 max-w-lg w-full text-left">
+                  <div className="rounded-lg bg-cream border border-beige-deep p-6 sm:p-8 max-w-lg w-full text-left">
                     <p className="text-[11px] font-semibold uppercase tracking-[1px] text-steel mb-5">
                       Get started in 30 seconds
                     </p>
                     <div className="space-y-5">
                       <div className="flex gap-3">
                         <span className="shrink-0 w-7 h-7 rounded-full bg-primary text-white flex items-center justify-center text-xs font-semibold">1</span>
-                        <div>
+                        <div className="min-w-0">
                           <p className="text-sm font-medium text-ink">Drag this button to your bookmarks bar:</p>
                           <a
                             ref={bookmarkletRef}
                             href="#"
-                            className="mt-2 px-4 py-2 inline-flex items-center gap-2 bg-primary text-white rounded-md text-sm font-medium cursor-grab active:cursor-grabbing"
+                            className="mt-2 px-4 py-2 max-w-full inline-flex items-center gap-2 bg-primary text-white rounded-md text-sm font-medium cursor-grab active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
                             onClick={(e) => { e.preventDefault(); alert("Drag this button to your bookmarks bar.\nThen click it on the HROne calendar page."); }}
                           >
                             Sync Attendance
@@ -820,10 +898,10 @@ function App() {
                       </div>
                       <div className="flex gap-3">
                         <span className="shrink-0 w-7 h-7 rounded-full bg-primary text-white flex items-center justify-center text-xs font-semibold">2</span>
-                        <div>
+                        <div className="min-w-0">
                           <p className="text-sm font-medium text-ink">
                             Open{" "}
-                            <a href="https://app.hrone.cloud/app/myprofile/calendar" target="_blank" rel="noopener noreferrer" className="text-link hover:underline">
+                            <a href="https://app.hrone.cloud/app/myprofile/calendar" target="_blank" rel="noopener noreferrer" className="text-link hover:underline break-words">
                               HROne Calendar
                             </a>
                           </p>
@@ -832,7 +910,7 @@ function App() {
                       </div>
                       <div className="flex gap-3">
                         <span className="shrink-0 w-7 h-7 rounded-full bg-primary text-white flex items-center justify-center text-xs font-semibold">3</span>
-                        <div>
+                        <div className="min-w-0">
                           <p className="text-sm font-medium text-ink">Click the bookmark — data appears here</p>
                           <p className="text-xs text-steel mt-0.5">First time you'll enter your Employee ID (from your HROne profile)</p>
                         </div>
@@ -842,14 +920,14 @@ function App() {
                       <a
                         href="/attendance-extension.zip"
                         download="attendance-extension.zip"
-                        className="inline-flex items-center gap-2 px-4 py-2 border border-hairline-strong bg-canvas text-ink rounded-md text-sm font-medium hover:bg-hairline-soft transition-colors"
+                        className="inline-flex items-center gap-2 px-4 py-2 border border-hairline-strong bg-canvas text-ink rounded-md text-sm font-medium hover:bg-hairline-soft transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
                       >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
                         </svg>
                         Download Extension
                       </a>
-                      <p className="text-[11px] text-stone">
+                      <p className="text-[11px] text-stone leading-relaxed px-2 text-balance">
                         Unzip → chrome://extensions → Developer mode → Load unpacked
                       </p>
                     </div>
@@ -907,7 +985,7 @@ function App() {
               profileImageUrl: null,
             }}
             yesterdayRecord={yesterdayRecord}
-            todayAttendance={todayAttendance}
+            todayAttendance={effectiveTodayAttendance}
             lastSynced={lastSynced}
             appVersion={APP_VERSION}
             onOpenPrivacy={() => setShowPrivacy(true)}

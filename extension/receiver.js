@@ -1,8 +1,23 @@
 /**
- * receiver.js — Content script injected into the React app (localhost).
+ * receiver.js — Content script injected into the React app page.
  * Receives attendance data from the background service worker
  * and dispatches it as a custom DOM event for the React app to consume.
+ *
+ * This script is injected on all http/https hosts (the app may be self-hosted
+ * on any LAN IP or port via `npx attendance-insights`), so it self-gates:
+ * it only activates on the Attendance Insights app page and is inert elsewhere.
  */
+
+(function () {
+  // Identify the app page. The app ships a static <title>Attendance Insights</title>
+  // (present before React mounts), and mounts into <div id="root">. Either
+  // marker is enough; require the title to avoid false positives on unrelated
+  // sites that happen to have a #root element.
+  const isAppPage = document.title.includes("Attendance Insights");
+  if (!isAppPage) {
+    // Not our app — stay completely inert on this page.
+    return;
+  }
 
 console.log("[Attendance Interceptor] receiver.js loaded on:", window.location.href);
 
@@ -124,7 +139,29 @@ window.addEventListener("RequestAttendanceSync", function (event) {
   );
 });
 
-// Signal to the app that the extension is present
-window.dispatchEvent(new CustomEvent("AttendanceExtensionReady"));
-// Also set a flag on the window that the app can check
+// Signal to the app that the extension is present.
+//
+// IMPORTANT: a content script runs in an ISOLATED world. Setting
+// `window.__attendanceExtensionReady` here is NOT visible to the page's own
+// `window` (the React app reads a different window object), so the flag alone
+// is unreliable. DOM CustomEvents, however, DO cross the isolated/main-world
+// boundary because they dispatch on the shared DOM EventTarget.
+//
+// The event is also a one-shot: if it fires before React mounts and registers
+// its listener, the app misses it and the Sync button stays disabled until
+// something else (opening HROne) re-triggers a message. To close that race we
+// re-dispatch the ready event a few times over the first few seconds so a
+// late-mounting listener still catches it.
+function announceReady() {
+  window.dispatchEvent(new CustomEvent("AttendanceExtensionReady"));
+}
+// Set the isolated-world flag too (harmless; some code paths may read it).
 window.__attendanceExtensionReady = true;
+announceReady();
+let readyPings = 0;
+const readyPing = setInterval(() => {
+  readyPings++;
+  announceReady();
+  if (readyPings >= 10) clearInterval(readyPing); // ~5s of coverage
+}, 500);
+})();

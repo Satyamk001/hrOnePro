@@ -27,6 +27,43 @@ function isAppTab(tab) {
   return false;
 }
 
+// === Background sync tab tracking ===
+// Tabs the extension itself opened to perform a "Sync Now" fetch. These are
+// opened in the background (active: false) and should be closed automatically
+// once the sync completes, errors out, or times out — so the user never sees
+// a lingering HROne tab. We only ever close tabs we opened ourselves; tabs the
+// user already had open are left untouched.
+const syncOwnedTabs = new Set();
+
+// Guards against double-closing (e.g. data arrives AND the timeout fires).
+function closeSyncTab(tabId, reason) {
+  if (!syncOwnedTabs.has(tabId)) return;
+  syncOwnedTabs.delete(tabId);
+  console.log("[Attendance Interceptor] Background: closing sync tab", tabId, "-", reason || "done");
+  chrome.tabs.remove(tabId, () => {
+    if (chrome.runtime.lastError) {
+      // Tab may already be gone — not an error we care about.
+      console.log("[Attendance Interceptor] Background: sync tab", tabId, "already closed");
+    }
+  });
+}
+
+// A HROne URL is considered "logged in and ready" only when it's on the actual
+// app host. Login/SSO/identity redirects land elsewhere (e.g. identity.hrone,
+// sso.hrone, or a /login path), which means the session has expired.
+function isLoggedInHroneUrl(url) {
+  if (!url) return false;
+  if (!url.startsWith("https://app.hrone.cloud/app/")) return false;
+  if (/\/(login|signin|sso|identity|auth)/i.test(url)) return false;
+  return true;
+}
+
+// If a sync-owned tab is closed by any means, drop it from tracking so a
+// recycled tab id can never be mistaken for one of ours.
+chrome.tabs.onRemoved.addListener((tabId) => {
+  syncOwnedTabs.delete(tabId);
+});
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "ATTENDANCE_DATA_INTERCEPTED") {
     const { records, sourceUrl } = message.payload;
@@ -77,6 +114,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
       });
     });
+
+    // If this data came from a tab we opened in the background for syncing,
+    // close it now that we've captured the records.
+    if (sender && sender.tab && sender.tab.id != null) {
+      closeSyncTab(sender.tab.id, "attendance data received");
+    }
 
     sendResponse({ success: true, recordCount: records.length });
     return true;
@@ -140,24 +183,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // When any http tab completes loading and looks like our app, send pending data
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === "complete" && isAppTab(tab)) {
-    // Domains already covered by the manifest content_scripts get receiver.js
-    // injected declaratively — skip programmatic injection for those to avoid
-    // double-loading. Only inject for tabs matched by the title fallback
-    // (e.g. arbitrary LAN IPs the manifest can't enumerate).
-    const manifestCovered =
-      tab.url.startsWith("http://localhost") ||
-      tab.url.startsWith("http://127.0.0.1") ||
-      tab.url.startsWith("http://10.10.22.12") ||
-      /^https:\/\/[^/]*\.vercel\.app/.test(tab.url) ||
-      /^https:\/\/[^/]*\.ngrok(-free)?\.(app|dev|io)/.test(tab.url);
-    if (!manifestCovered) {
-      chrome.scripting.executeScript({
-        target: { tabId },
-        files: ["receiver.js"],
-      }).catch((err) => {
-        console.warn("[Attendance Interceptor] Background: could not inject receiver.js:", err.message);
-      });
-    }
+    // receiver.js is now injected declaratively on every http/https host (it
+    // self-gates to the app page), so no programmatic injection is needed here.
 
     chrome.storage.local.get(["lastInterceptedData", "lastInterceptedAt"], (result) => {
       if (result.lastInterceptedData) {
@@ -213,21 +240,70 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           error: "Please log into HROne (app.hrone.cloud), then try Sync again.",
         });
       } else {
-        // Open HROne in background — user must be logged in
-        console.log("[Attendance Interceptor] Background: Opening HROne tab...");
+        // Open HROne in a background tab (active: false → doesn't steal focus).
+        // The user never has to look at it. We detect three outcomes:
+        //   1. Lands on app.hrone.cloud/app/... → logged in → fetch, then close.
+        //   2. Redirects to a login/SSO page → not logged in → error, then close.
+        //   3. Never finishes within the timeout → error, then close.
+        console.log("[Attendance Interceptor] Background: Opening HROne tab in background...");
         chrome.tabs.create(
           { url: "https://app.hrone.cloud/app/myprofile/calendar", active: false },
           (tab) => {
-            // Wait for the tab to finish loading
-            chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo) {
-              if (tabId === tab.id && changeInfo.status === "complete") {
+            const createdTabId = tab.id;
+            syncOwnedTabs.add(createdTabId);
+            let settled = false;
+
+            // Safety timeout: if HROne never finishes loading / responding,
+            // don't leave the tab open forever.
+            const timeout = setTimeout(() => {
+              if (settled) return;
+              settled = true;
+              chrome.tabs.onUpdated.removeListener(listener);
+              notifyAppTabs({
+                success: false,
+                error: "Timed out reaching HROne. Make sure you're logged in and try again.",
+              });
+              closeSyncTab(createdTabId, "timeout");
+            }, 20000);
+
+            function listener(tabId, changeInfo, updatedTab) {
+              if (tabId !== createdTabId || changeInfo.status !== "complete") return;
+              if (settled) return;
+
+              const finalUrl = (updatedTab && updatedTab.url) || "";
+              if (!isLoggedInHroneUrl(finalUrl)) {
+                // Redirected to login/SSO — session expired or never signed in.
+                settled = true;
+                clearTimeout(timeout);
                 chrome.tabs.onUpdated.removeListener(listener);
-                // Small delay to let HROne JS initialize
-                setTimeout(() => {
-                  injectFetchScript(tab.id, eid, m, y);
-                }, 2000);
+                console.log("[Attendance Interceptor] Background: HROne not logged in, landed on", finalUrl);
+                notifyAppTabs({
+                  success: false,
+                  error: "Not logged in to HROne. Please log into app.hrone.cloud, then try Sync again.",
+                });
+                closeSyncTab(createdTabId, "not logged in");
+                return;
               }
-            });
+
+              // Logged in and on the app — proceed to fetch. The tab stays in
+              // syncOwnedTabs and is closed by the ATTENDANCE_DATA_INTERCEPTED
+              // handler once records arrive. Clear the load listener; keep a
+              // shorter fetch timeout so a stuck fetch still closes the tab.
+              settled = true;
+              clearTimeout(timeout);
+              chrome.tabs.onUpdated.removeListener(listener);
+              setTimeout(() => {
+                injectFetchScript(createdTabId, eid, m, y);
+              }, 2000);
+
+              // Fallback close in case the fetch yields no ATTENDANCE_DATA
+              // message (e.g. no records for the month) — don't orphan the tab.
+              setTimeout(() => {
+                closeSyncTab(createdTabId, "fetch fallback timeout");
+              }, 15000);
+            }
+
+            chrome.tabs.onUpdated.addListener(listener);
           }
         );
       }
@@ -261,6 +337,7 @@ function injectFetchScript(tabId, eid, month, year) {
           ? "Please log into HROne (app.hrone.cloud), then try Sync again."
           : "Couldn't reach HROne. Make sure you're logged in and try again.";
         notifyAppTabs({ success: false, error: friendly });
+        closeSyncTab(tabId, "fetch inject failed");
       });
     } else {
       console.log("[Attendance Interceptor] Background: content script handling fetch", response);
