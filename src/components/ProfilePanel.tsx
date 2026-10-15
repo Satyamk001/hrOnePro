@@ -22,7 +22,7 @@ export default function ProfilePanel({ profile, yesterdayRecord, todayAttendance
     .toUpperCase();
 
   return (
-    <aside className="w-64 shrink-0 flex flex-col overflow-hidden mt-14 h-[calc(100%-3.5rem)]">
+    <aside className="w-72 shrink-0 flex flex-col overflow-hidden mt-14 h-[calc(100%-3.5rem)]">
       <div className="flex-1 overflow-y-auto p-5 space-y-6">
         {/* Employee Card */}
         <GlowCard className="rounded-lg p-5 text-center">
@@ -56,7 +56,7 @@ export default function ProfilePanel({ profile, yesterdayRecord, todayAttendance
         {/* Profile Details */}
         <div className="space-y-3">
           {profile.email && (
-            <ProfileField label="Email" value={profile.email} />
+            <ProfileField label="Email" value={profile.email} copyable />
           )}
           {profile.dateOfJoining && (
             <ProfileField
@@ -195,11 +195,60 @@ function TodayAttendanceLive({ todayAttendance }: { todayAttendance: TodayAttend
   );
 }
 
-function ProfileField({ label, value }: { label: string; value: string }) {
+function ProfileField({ label, value, copyable = false }: { label: string; value: string; copyable?: boolean }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch {
+      // Fallback for insecure contexts / older browsers
+      const ta = document.createElement("textarea");
+      ta.value = value;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand("copy");
+      } catch {
+        /* ignore */
+      }
+      document.body.removeChild(ta);
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  if (!copyable) {
+    return (
+      <div>
+        <p className="text-[10px] text-steel uppercase tracking-wide">{label}</p>
+        <p className="text-sm text-ink truncate" title={value}>{value}</p>
+      </div>
+    );
+  }
+
   return (
     <div>
-      <p className="text-[10px] text-steel uppercase tracking-wide">{label}</p>
-      <p className="text-sm text-ink truncate" title={value}>{value}</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[10px] text-steel uppercase tracking-wide">{label}</p>
+        <span
+          className={`text-[10px] font-medium transition-opacity ${copied ? "text-primary opacity-100" : "opacity-0"}`}
+          aria-hidden={!copied}
+        >
+          Copied
+        </span>
+      </div>
+      <button
+        type="button"
+        onClick={handleCopy}
+        title={`Click to copy ${label.toLowerCase()}`}
+        aria-label={`Copy ${label.toLowerCase()}: ${value}`}
+        className="group w-full text-left text-sm text-ink hover:text-primary transition-colors [overflow-wrap:anywhere] cursor-pointer"
+      >
+        {value}
+      </button>
     </div>
   );
 }
