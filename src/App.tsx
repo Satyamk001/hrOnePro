@@ -1,32 +1,45 @@
-import { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef, type FormEvent } from "react";
 import type { AttendanceRecord, DashboardMetrics, EnrichedRecord, EmployeeProfile, TodayAttendance, RawPunch } from "./types";
 import { classifyRecord } from "./utils/classifier";
 import {
   computeRecordMetrics,
   computeAggregateMetrics,
   formatMinutes,
-  parseHHMM,
 } from "./utils/timeCalculator";
 import { generateBookmarkletCode } from "./bookmarklet";
 import Dashboard from "./components/Dashboard";
 import DayTable from "./components/DayTable";
 import ProfilePanel from "./components/ProfilePanel";
+import TodayCard from "./components/TodayCard";
 import PrivacyPage from "./components/PrivacyPage";
 import { GlassToggle } from "./components/ui/GlassToggle";
 import { SplashButton } from "./components/ui/SplashButton";
 import { ClickRipple } from "./components/ui/ClickRipple";
 import AnimatedCounter from "./components/ui/AnimatedCounter";
+import { useNow } from "./hooks/useNow";
+import {
+  DEFAULT_SHIFT_MINUTES,
+  formatRelativeAge,
+  getFreshness,
+  leaveAtMinutes,
+  localDateDaysAgo,
+  localDateString,
+  shiftLengthMinutes,
+} from "./utils/liveTime";
 
 const STORAGE_KEY = "attendance-insights-data";
 const USER_KEY = "attendance-insights-user";
 const PROFILE_KEY = "attendance-insights-profile";
 const TODAY_KEY = "attendance-insights-today";
+const LAST_SYNCED_KEY = "attendance-last-synced";
+const EMP_ID_KEY = "attendance-empId";
 const BOOKMARKLET_VERSION = "5";
 const BOOKMARKLET_VERSION_KEY = "attendance-bookmarklet-version";
 const EXTENSION_VERSION = "2.6.0";
 const EXTENSION_VERSION_KEY = "attendance-extension-version";
 const APP_VERSION_KEY = "attendance-app-version";
-const APP_VERSION = "1.6.0"; // Bump this on each release
+const APP_VERSION = __APP_VERSION__; // from package.json via vite define
+const SYNC_TIMEOUT_MS = 15000;
 interface SavedEntry { label: string; key: string; records: AttendanceRecord[]; }
 
 function deriveMonthKey(records: AttendanceRecord[]): string {
@@ -100,8 +113,9 @@ function loadSavedEntries(): SavedEntry[] {
 
 function saveTolocalStorage(entries: SavedEntry[]) { localStorage.setItem(STORAGE_KEY, JSON.stringify(entries)); }
 
-function getYesterdayDate(): string {
-  const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().split("T")[0];
+/** Smooth scrolling unless the user asked the OS for reduced motion. */
+function scrollBehavior(): ScrollBehavior {
+  return typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
 }
 
 const NON_WORKING_STATUSES = new Set(["Week Off", "Holiday"]);
@@ -109,12 +123,12 @@ const NON_WORKING_STATUSES = new Set(["Week Off", "Holiday"]);
 /** Walk backwards from yesterday up to 7 days to find the most recent working day record */
 function findLastWorkingDayRecord(
   enrichedRecords: EnrichedRecord[] | null,
-  allEntries: SavedEntry[]
+  allEntries: SavedEntry[],
+  now: Date = new Date()
 ): { record: EnrichedRecord; date: string; daysAgo: number } | null {
   for (let daysBack = 1; daysBack <= 7; daysBack++) {
-    const d = new Date();
-    d.setDate(d.getDate() - daysBack);
-    const dateStr = d.toISOString().split("T")[0];
+    // Local date — UTC would point at the wrong day before 05:30 IST.
+    const dateStr = localDateDaysAgo(daysBack, now);
 
     let rec: EnrichedRecord | undefined;
 
@@ -139,67 +153,6 @@ function findLastWorkingDayRecord(
   return null;
 }
 
-function YesterdaySummary({ records, allEntries }: { records: EnrichedRecord[]; allEntries: SavedEntry[] }) {
-  const result = findLastWorkingDayRecord(records, allEntries);
-  if (!result) {
-    const yesterday = getYesterdayDate();
-    return (
-      <div className="rounded-lg border border-hairline bg-cream p-5">
-        <p className="text-xs font-medium uppercase tracking-wide text-steel">Last Working Day</p>
-        <p className="text-sm text-slate mt-1">No recent working day data ({new Date(yesterday).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })})</p>
-      </div>
-    );
-  }
-
-  const rec = result.record;
-  const dateLabel = new Date(result.date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-  const shift = parseHHMM(rec.shiftEndTime) - parseHHMM(rec.shiftStartTime);
-  const ed = rec.extraDeficitMinutes;
-
-  return (
-    <div className="rounded-lg border border-beige-deep bg-cream p-5">
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-xs font-medium uppercase tracking-wide text-steel">
-          {result.daysAgo === 1 ? "Yesterday" : dateLabel}
-        </p>
-        <span className="text-xs font-medium text-charcoal bg-cream-deeper px-2 py-0.5 rounded-full">{rec.status}</span>
-      </div>
-      {rec.isWorkedDay ? (
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-4">
-          <Stat label="In" value={rec.timeIn ?? "—"} mono />
-          <Stat label="Out" value={rec.timeout ?? "—"} mono />
-          <Stat label="Worked" value={formatMinutes(rec.workedMinutes)} mono />
-          <Stat label="Shift" value={formatMinutes(shift)} mono />
-          <Stat
-            label="+/− Shift"
-            value={`${ed < 0 ? "-" : "+"}${formatMinutes(Math.abs(ed))}`}
-            mono
-            color={ed > 0 ? "text-primary" : ed < 0 ? "text-error" : undefined}
-          />
-          <Stat label="Late" value={rec.isLateArrival ? "Yes" : "No"} color={rec.isLateArrival ? "text-warning" : undefined} />
-        </div>
-      ) : (
-        <p className="text-sm text-charcoal">
-          {rec.status === "Absent"
-            ? "Absent — no attendance recorded"
-            : rec.status === "Flexi Leave" || rec.status === "Earned Leave" || rec.status === "Leave"
-              ? `${rec.status} — on leave`
-              : `${rec.status} — not a working day`}
-        </p>
-      )}
-    </div>
-  );
-}
-
-function Stat({ label, value, mono, color }: { label: string; value: string; mono?: boolean; color?: string }) {
-  return (
-    <div>
-      <p className="text-[10px] text-steel uppercase tracking-wide">{label}</p>
-      <p className={`text-sm font-medium ${mono ? "font-mono" : ""} ${color || "text-ink"}`}>{value}</p>
-    </div>
-  );
-}
-
 function PaddedCounter({ value, ...props }: { value: number; duration: number; continuous: boolean; separator: boolean; className?: string }) {
   const tens = Math.floor(value / 10);
   const units = value % 10;
@@ -211,13 +164,8 @@ function PaddedCounter({ value, ...props }: { value: number; duration: number; c
   );
 }
 
-function LiveClock({ todayAttendance }: { todayAttendance: TodayAttendance | null }) {
-  const [now, setNow] = useState(new Date());
-
-  useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
+function LiveClock({ todayAttendance, shiftMinutes }: { todayAttendance: TodayAttendance | null; shiftMinutes: number }) {
+  const now = useNow(1000);
 
   const hours = now.getHours();
   const minutes = now.getMinutes();
@@ -227,9 +175,8 @@ function LiveClock({ todayAttendance }: { todayAttendance: TodayAttendance | nul
   let timeLeftDisplay: string | null = null;
   let shiftComplete = false;
 
-  if (todayAttendance && todayAttendance.firstPunch) {
-    const [h, m] = todayAttendance.firstPunch.split(":").map(Number);
-    const leaveMinutes = h * 60 + m + 540; // first punch + 9 hours
+  const leaveMinutes = todayAttendance?.firstPunch ? leaveAtMinutes(todayAttendance.firstPunch, shiftMinutes) : null;
+  if (leaveMinutes !== null) {
     const nowMinutes = now.getHours() * 60 + now.getMinutes();
     const diff = leaveMinutes - nowMinutes;
 
@@ -252,17 +199,26 @@ function LiveClock({ todayAttendance }: { todayAttendance: TodayAttendance | nul
       <svg className="w-3.5 h-3.5 text-steel shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
-      <span className="font-mono text-sm font-semibold text-ink tabular-nums inline-flex items-center clock-time">
-        <PaddedCounter value={hours} duration={0.3} continuous separator={false} className="text-sm font-mono text-ink" />
-        <span className="text-steel">:</span>
-        <PaddedCounter value={minutes} duration={0.3} continuous separator={false} className="text-sm font-mono text-ink" />
-        <span className="text-steel">:</span>
-        <PaddedCounter value={seconds} duration={0.3} continuous separator={false} className="text-sm font-mono text-ink" />
+      <span
+        className="font-mono text-sm font-semibold text-ink tabular-nums inline-flex items-center clock-time"
+        role="timer"
+        aria-label={`Current time ${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`}
+      >
+        <span aria-hidden="true" className="inline-flex items-center">
+          <PaddedCounter value={hours} duration={0.3} continuous separator={false} className="text-sm font-mono text-ink" />
+          <span className="text-steel">:</span>
+          <PaddedCounter value={minutes} duration={0.3} continuous separator={false} className="text-sm font-mono text-ink" />
+          <span className="text-steel">:</span>
+          <PaddedCounter value={seconds} duration={0.3} continuous separator={false} className="text-sm font-mono text-ink" />
+        </span>
       </span>
       {timeLeftDisplay && (
         <>
           <div className="pill-divider" />
-          <span className={`clock-status text-xs font-medium ${shiftComplete ? "status-complete" : "status"}`}>
+          <span
+            className={`clock-status text-xs font-medium ${shiftComplete ? "status-complete" : "status"}`}
+            title={`Based on a ${Math.floor(shiftMinutes / 60)}h ${shiftMinutes % 60}m shift`}
+          >
             {timeLeftDisplay}
           </span>
         </>
@@ -282,20 +238,35 @@ function App() {
   const [showAllDays, setShowAllDays] = useState(false);
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains("dark"));
   const [toast, setToast] = useState<string | null>(null);
-  const [lastSynced, setLastSynced] = useState<string | null>(() => localStorage.getItem("attendance-last-synced"));
+  const toastTimerRef = useRef<number | undefined>(undefined);
+  const showToast = useCallback((msg: string, ms = 3000) => {
+    window.clearTimeout(toastTimerRef.current);
+    setToast(msg);
+    toastTimerRef.current = window.setTimeout(() => setToast(null), ms);
+  }, []);
+  const [lastSynced, setLastSynced] = useState<string | null>(() => localStorage.getItem(LAST_SYNCED_KEY));
   const [extensionAvailable, setExtensionAvailable] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const syncingRef = useRef(false);
+  const syncTimeoutRef = useRef<number | undefined>(undefined);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  // Previous version of a month that a re-sync just shrank — offered as Undo.
+  const [undoEntry, setUndoEntry] = useState<{ entry: SavedEntry; message: string } | null>(null);
+  const [empIdDialogOpen, setEmpIdDialogOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  // Ticks every 30s (and on tab focus) so "Today", "Yesterday" and
+  // "synced X ago" roll over without a reload.
+  const now = useNow(30000);
+  const today = localDateString(now);
   const [todayAttendance, setTodayAttendance] = useState<TodayAttendance | null>(() => {
     // Rehydrate today's punches from the last successful sync — but only if the
-    // stored data is actually for today, so stale punches from a previous day
-    // don't linger. This keeps the "Today" card visible even when HROne is slow
-    // or the page is reloaded before a fresh sync completes.
+    // stored data is actually for today (LOCAL date), so stale punches from a
+    // previous day don't linger.
     try {
       const raw = localStorage.getItem(TODAY_KEY);
       if (!raw) return null;
       const stored = JSON.parse(raw) as TodayAttendance;
-      const todayStr = new Date().toISOString().split("T")[0];
-      return stored.date === todayStr ? stored : null;
+      return stored.date === localDateString() ? stored : null;
     } catch {
       return null;
     }
@@ -321,6 +292,59 @@ function App() {
     // Save current versions
     localStorage.setItem(APP_VERSION_KEY, APP_VERSION);
     localStorage.setItem(EXTENSION_VERSION_KEY, EXTENSION_VERSION);
+  }, []);
+
+  // Midnight rollover: yesterday's live punches must not keep showing as "Today".
+  useEffect(() => {
+    if (todayAttendance && todayAttendance.date !== today) {
+      setTodayAttendance(null);
+      try { localStorage.removeItem(TODAY_KEY); } catch { /* ignore */ }
+    }
+  }, [today, todayAttendance]);
+
+  // Cross-tab sync: a sync (or theme change) in another tab updates this one.
+  // The `storage` event only fires in OTHER tabs and only when the value
+  // actually changes, so writing back the same data can't loop.
+  useEffect(() => {
+    const parse = <T,>(v: string | null): T | null => {
+      if (!v) return null;
+      try { return JSON.parse(v) as T; } catch { return null; }
+    };
+    const onStorage = (e: StorageEvent) => {
+      if (e.storageArea !== localStorage) return;
+      switch (e.key) {
+        case STORAGE_KEY: {
+          const entries = parse<SavedEntry[]>(e.newValue) ?? [];
+          setSavedEntries(entries);
+          setActiveKey((prev) =>
+            prev && entries.some((x) => x.key === prev)
+              ? prev
+              : entries.length ? [...entries].sort((a, b) => b.key.localeCompare(a.key))[0].key : null
+          );
+          break;
+        }
+        case LAST_SYNCED_KEY: setLastSynced(e.newValue); break;
+        case PROFILE_KEY: setEmployeeProfile(parse<EmployeeProfile>(e.newValue)); break;
+        case USER_KEY: setUserName(e.newValue || ""); break;
+        case TODAY_KEY: {
+          const t = parse<TodayAttendance>(e.newValue);
+          setTodayAttendance(t && t.date === localDateString() ? t : null);
+          break;
+        }
+        case "theme": {
+          const dark = e.newValue === "dark";
+          document.documentElement.classList.toggle("dark", dark);
+          setIsDark(dark);
+          break;
+        }
+        case null: // localStorage.clear() in another tab
+          setSavedEntries([]); setActiveKey(null); setLastSynced(null);
+          setEmployeeProfile(null); setTodayAttendance(null);
+          break;
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, []);
 
   const appUrl = window.location.origin;
@@ -419,7 +443,7 @@ function App() {
 
   useEffect(() => {
     if (activeItemRef.current) {
-      activeItemRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+      activeItemRef.current.scrollIntoView({ behavior: scrollBehavior(), block: "center" });
     }
   }, [activeKey]);
 
@@ -429,6 +453,14 @@ function App() {
   }, [activeKey, savedEntries]);
 
   useEffect(() => { saveTolocalStorage(savedEntries); }, [savedEntries]);
+  const savedEntriesRef = useRef(savedEntries);
+  savedEntriesRef.current = savedEntries;
+
+  const finishSync = useCallback(() => {
+    syncingRef.current = false;
+    setSyncing(false);
+    window.clearTimeout(syncTimeoutRef.current);
+  }, []);
 
   const handleDataParsed = useCallback((data: AttendanceRecord[]) => {
     if (!Array.isArray(data) || data.length === 0) return;
@@ -436,12 +468,22 @@ function App() {
 
     // Save employee ID for future Sync Now use
     if (data[0].employeeId) {
-      localStorage.setItem("attendance-empId", String(data[0].employeeId));
+      localStorage.setItem(EMP_ID_KEY, String(data[0].employeeId));
     }
 
     const normalized = normalizeRecords(data);
     const monthKey = deriveMonthKey(normalized);
     const label = formatMonthLabel(monthKey);
+
+    // Re-syncing replaces the stored month. If the new data has fewer days or
+    // fewer punched days (e.g. HROne returned a partial response), keep the
+    // previous copy so the user can undo instead of silently losing data.
+    const previous = savedEntriesRef.current.find((e) => e.key === monthKey);
+    const punched = (rs: AttendanceRecord[]) => rs.filter((r) => r.timeIn).length;
+    const shrank = previous && (
+      normalized.length < previous.records.length || punched(normalized) < punched(previous.records)
+    );
+
     setSavedEntries((prev) => {
       const idx = prev.findIndex((e) => e.key === monthKey);
       if (idx >= 0) { const u = [...prev]; u[idx] = { label, key: monthKey, records: normalized }; return u; }
@@ -449,20 +491,37 @@ function App() {
     });
     setActiveKey(monthKey);
 
-    const now = new Date().toISOString();
-    setLastSynced(now);
-    localStorage.setItem("attendance-last-synced", now);
+    const syncedAt = new Date().toISOString();
+    setLastSynced(syncedAt);
+    localStorage.setItem(LAST_SYNCED_KEY, syncedAt);
 
-    setToast(`Synced ${label} — ${normalized.length} days`);
-    setTimeout(() => setToast(null), 3000);
-    setSyncing(false);
+    if (shrank && previous) {
+      setUndoEntry({
+        entry: previous,
+        message: `Re-sync replaced ${label}: ${punched(previous.records)} → ${punched(normalized)} punched days.`,
+      });
+    } else {
+      setUndoEntry(null);
+      showToast(`Synced ${label} — ${normalized.length} days`);
+    }
+    setSyncError(null);
+    finishSync();
     // Receiving data from the extension is proof it's installed and active.
     // The AttendanceExtensionReady signal can be missed on load (e.g. when the
     // extension is reloaded while this tab is already open, or injected
     // programmatically for a non-manifest host), which would otherwise leave
     // the Sync button disabled even though sync just succeeded.
     setExtensionAvailable(true);
-  }, []);
+  }, [showToast, finishSync]);
+
+  const handleUndoResync = useCallback(() => {
+    if (!undoEntry) return;
+    const { entry } = undoEntry;
+    setSavedEntries((prev) => prev.map((e) => (e.key === entry.key ? entry : e)));
+    setActiveKey(entry.key);
+    setUndoEntry(null);
+    showToast(`Restored previous ${entry.label} data`);
+  }, [undoEntry, showToast]);
 
   useEffect(() => {
     const h = (event: Event) => { const e = event as CustomEvent<{ records: AttendanceRecord[] }>; if (e.detail?.records) handleDataParsed(e.detail.records); };
@@ -554,40 +613,32 @@ function App() {
   useEffect(() => {
     const h = (event: Event) => {
       const e = event as CustomEvent<{ success: boolean; error?: string }>;
-      if (e.detail && !e.detail.success && e.detail.error) {
-        setToast(`Sync failed: ${e.detail.error}`);
-        setTimeout(() => setToast(null), 4000);
+      if (e.detail && !e.detail.success) {
+        setSyncError(e.detail.error || "HROne didn't return any data.");
       }
-      setSyncing(false);
+      finishSync();
     };
     window.addEventListener("ExtensionSyncStatus", h);
     return () => window.removeEventListener("ExtensionSyncStatus", h);
-  }, []);
+  }, [finishSync]);
 
-  // Sync Now handler
-  const handleSyncNow = useCallback(() => {
-    // Try to get employee ID from: localStorage, stored profile, or existing records
-    let empId = parseInt(localStorage.getItem("attendance-empId") || "0");
+  const resolveEmpId = useCallback((): number => {
+    let empId = parseInt(localStorage.getItem(EMP_ID_KEY) || "0");
     if (!empId && employeeProfile) empId = employeeProfile.employeeId;
     if (!empId && savedEntries.length > 0) {
       const firstRecord = savedEntries[0].records[0];
       if (firstRecord) empId = firstRecord.employeeId;
     }
-    if (!empId) {
-      const input = prompt("Enter your Employee ID (find it in your HROne profile):");
-      empId = parseInt(input || "0");
-      if (!empId) {
-        setToast("Employee ID is required for syncing.");
-        setTimeout(() => setToast(null), 4000);
-        return;
-      }
-    }
-    localStorage.setItem("attendance-empId", String(empId));
-    const now = new Date();
+    return empId || 0;
+  }, [employeeProfile, savedEntries]);
+
+  const startSync = useCallback((empId: number) => {
+    localStorage.setItem(EMP_ID_KEY, String(empId));
+    const current = new Date();
     // Sync the month currently selected in the sidebar (activeKey is "YYYY-MM").
     // Fall back to the current month when nothing is selected (first-time user).
-    let syncMonth = now.getMonth() + 1;
-    let syncYear = now.getFullYear();
+    let syncMonth = current.getMonth() + 1;
+    let syncYear = current.getFullYear();
     if (activeKey) {
       const [y, m] = activeKey.split("-").map(Number);
       if (!Number.isNaN(y) && !Number.isNaN(m)) {
@@ -595,13 +646,27 @@ function App() {
         syncMonth = m;
       }
     }
+    setSyncError(null);
+    syncingRef.current = true;
     setSyncing(true);
     window.dispatchEvent(new CustomEvent("RequestAttendanceSync", {
       detail: { employeeId: empId, month: syncMonth, year: syncYear }
     }));
-    // Timeout fallback — if no response in 15s
-    setTimeout(() => setSyncing(false), 15000);
-  }, [employeeProfile, savedEntries, activeKey]);
+    // No response at all → say so instead of silently re-enabling the button.
+    window.clearTimeout(syncTimeoutRef.current);
+    syncTimeoutRef.current = window.setTimeout(() => {
+      if (!syncingRef.current) return;
+      finishSync();
+      setSyncError("No response from HROne after 15 seconds.");
+    }, SYNC_TIMEOUT_MS);
+  }, [activeKey, finishSync]);
+
+  // Sync Now handler
+  const handleSyncNow = useCallback(() => {
+    const empId = resolveEmpId();
+    if (!empId) { setEmpIdDialogOpen(true); return; }
+    startSync(empId);
+  }, [resolveEmpId, startSync]);
 
   useEffect(() => {
     const h = (event: MessageEvent) => {
@@ -651,32 +716,62 @@ function App() {
 
   // Compute last working day record for the profile panel
   const yesterdayRecord = useMemo<EnrichedRecord | null>(() => {
-    const result = findLastWorkingDayRecord(enrichedRecords, savedEntries);
+    const result = findLastWorkingDayRecord(enrichedRecords, savedEntries, new Date());
     return result ? result.record : null;
-  }, [enrichedRecords, savedEntries]);
+    // `today` re-runs this at midnight so "yesterday" moves forward.
+  }, [enrichedRecords, savedEntries, today]);
 
   // Today's record straight from the Calendar data (today's row is included in
   // the monthly records). This is the fallback source for the "Today" card when
   // there's no live RawPunch data (e.g. the bookmarklet path, or before punches
   // load). Prefer the live `todayAttendance` when available since it updates
   // intraday; otherwise synthesize a TodayAttendance from today's record.
+  const todayRecord = useMemo<EnrichedRecord | null>(() => {
+    if (enrichedRecords) {
+      const rec = enrichedRecords.find((r) => r.attendanceDate === today);
+      if (rec) return rec;
+    }
+    // Today may live in a different month entry than the one being viewed.
+    for (const entry of savedEntries) {
+      const match = entry.records.find((r) => r.attendanceDate.split("T")[0] === today);
+      if (match) return computeRecordMetrics(classifyRecord({ ...match, attendanceDate: today }));
+    }
+    return null;
+  }, [enrichedRecords, savedEntries, today]);
+
   const effectiveTodayAttendance = useMemo<TodayAttendance | null>(() => {
-    if (todayAttendance) return todayAttendance;
-    if (!enrichedRecords) return null;
-    const now = new Date();
-    const localToday = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-    const rec = enrichedRecords.find((r) => r.attendanceDate === localToday);
+    if (todayAttendance && todayAttendance.date === today) return todayAttendance;
+    const rec = todayRecord;
     // Only show a Today card if the person actually punched in today.
     if (!rec || !rec.timeIn) return null;
     return {
-      date: localToday,
+      date: today,
       firstPunch: rec.timeIn,
       lastPunch: rec.timeout ?? rec.timeIn,
       punchCount: rec.timeout ? 2 : 1,
       workedMinutesSoFar: rec.workedMinutes,
       isStillIn: !rec.timeout,
     };
-  }, [todayAttendance, enrichedRecords]);
+  }, [todayAttendance, todayRecord, today]);
+
+  // Shift length for "Can leave at": today's scheduled shift from HROne, else
+  // the most recent day that has shift times, else the 9h GEN default.
+  const todayShiftMinutes = useMemo<number>(() => {
+    const fromToday = todayRecord ? shiftLengthMinutes(todayRecord.shiftStartTime, todayRecord.shiftEndTime) : null;
+    if (fromToday) return fromToday;
+    const all = savedEntries
+      .flatMap((e) => e.records)
+      .filter((r) => r.shiftStartTime && r.shiftEndTime && r.attendanceDate.split("T")[0] <= today)
+      .sort((a, b) => b.attendanceDate.localeCompare(a.attendanceDate));
+    for (const r of all) {
+      const len = shiftLengthMinutes(r.shiftStartTime, r.shiftEndTime);
+      if (len) return len;
+    }
+    return DEFAULT_SHIFT_MINUTES;
+  }, [todayRecord, savedEntries, today]);
+
+  const freshness = getFreshness(lastSynced, now);
+  const syncedAgo = formatRelativeAge(lastSynced, now);
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-canvas relative">
@@ -698,7 +793,7 @@ function App() {
 
           {/* Pill 2 — Time / Status (Center) */}
           <div className="glass-pill clock-pill">
-            <LiveClock todayAttendance={effectiveTodayAttendance} />
+            <LiveClock todayAttendance={effectiveTodayAttendance} shiftMinutes={todayShiftMinutes} />
           </div>
 
           {/* Pill 3 — Actions (Right) */}
@@ -760,13 +855,15 @@ function App() {
         </div>
       </header>
 
-      <div className="flex flex-1 overflow-hidden mt-0">
-        {/* Toast notification */}
-        {toast && (
-          <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 bg-ink text-canvas text-xs font-medium rounded-full shadow-card animate-[fadeIn_0.2s_ease-out]">
-            {toast}
-          </div>
-        )}
+      <div className="flex flex-col md:flex-row flex-1 overflow-hidden mt-0">
+        {/* Toast notification — always-mounted live region so screen readers announce it */}
+        <div role="status" aria-live="polite" className="fixed top-20 left-1/2 -translate-x-1/2 z-50 pointer-events-none">
+          {toast && (
+            <div className="px-5 py-2.5 bg-ink text-canvas text-xs font-medium rounded-full shadow-card animate-[fadeIn_0.2s_ease-out]">
+              {toast}
+            </div>
+          )}
+        </div>
 
         {/* Sidebar — Cinematic episode selector */}
         <aside className="w-full xl:w-[22%] xl:max-w-[340px] lg:w-[25%] lg:max-w-[320px] md:w-[30%] md:max-w-[300px] shrink-0 flex flex-col overflow-hidden z-10 max-md:h-auto max-md:min-h-[100px] max-md:max-h-[60vh] md:h-full relative">
@@ -793,9 +890,11 @@ function App() {
                         }}
                         onClick={(e) => {
                           setActiveKey(entry.key);
-                          e.currentTarget.scrollIntoView({ behavior: "smooth", block: "center" });
+                          e.currentTarget.scrollIntoView({ behavior: scrollBehavior(), block: "center" });
                         }}
-                        className="cursor-pointer block text-left"
+                        aria-current={isActive ? "true" : undefined}
+                        aria-label={`${entry.label}${isActive ? " (selected)" : ""}`}
+                        className="cursor-pointer block text-left rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
                         style={{
                           width: '72%',
                           maxWidth: '230px',
@@ -852,6 +951,61 @@ function App() {
             <PrivacyPage onBack={() => setShowPrivacy(false)} />
           ) : (
             <div className="px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-8 max-w-[1280px]">
+              {syncError && (
+                <div role="alert" className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-lg notice notice-error px-4 py-3">
+                  <svg className="w-5 h-5 text-error shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                  </svg>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-ink">Sync failed: {syncError}</p>
+                    <p className="text-xs text-steel mt-0.5">
+                      Make sure you're logged in at{" "}
+                      <a href="https://app.hrone.cloud/app/myprofile/calendar" target="_blank" rel="noopener noreferrer" className="text-link underline">HROne</a>
+                      {" "}in this browser, then retry. Your saved data is unchanged.
+                    </p>
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={handleSyncNow}
+                      disabled={syncing || !extensionAvailable}
+                      className="px-3 py-1.5 rounded-md bg-primary text-white text-sm font-medium disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
+                    >
+                      {syncing ? "Retrying…" : "Retry"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSyncError(null)}
+                      className="px-3 py-1.5 rounded-md text-sm font-medium text-steel hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+              )}
+              {undoEntry && (
+                <div role="status" className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-lg notice notice-warning px-4 py-3">
+                  <p className="flex-1 text-sm text-ink">
+                    <span className="font-medium">Fewer days than before.</span> {undoEntry.message}
+                  </p>
+                  <div className="flex gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={handleUndoResync}
+                      className="px-3 py-1.5 rounded-md border border-hairline-strong bg-canvas text-ink text-sm font-medium hover:bg-hairline-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    >
+                      Undo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setUndoEntry(null)}
+                      className="px-3 py-1.5 rounded-md text-sm font-medium text-steel hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    >
+                      Keep new data
+                    </button>
+                  </div>
+                </div>
+              )}
               {(!attendanceData || showOnboarding) ? (
                 <div className="flex flex-col items-center justify-center py-12 sm:py-16 lg:py-20 text-center">
                   {showOnboarding && attendanceData && (
@@ -935,11 +1089,57 @@ function App() {
                 </div>
               ) : (
                 <>
-                  {activeLabel && (
-                    <h2 className="font-display text-3xl font-medium text-ink tracking-display">{activeLabel}</h2>
-                  )}
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    {activeLabel && (
+                      <h2 className="font-display text-3xl font-medium text-ink tracking-display">{activeLabel}</h2>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`freshness-chip freshness-${freshness}`}
+                        title={lastSynced ? `Last synced ${new Date(lastSynced).toLocaleString()}` : "Never synced"}
+                      >
+                        <span className="freshness-dot" aria-hidden="true" />
+                        {freshness === "stale" ? "Data may be outdated · " : ""}
+                        Synced {syncedAgo}
+                      </span>
+                      {freshness !== "fresh" && (
+                        extensionAvailable ? (
+                          <button
+                            type="button"
+                            onClick={handleSyncNow}
+                            disabled={syncing}
+                            className="text-sm font-medium text-link hover:underline disabled:opacity-50 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                          >
+                            {syncing ? "Syncing…" : "Sync now"}
+                          </button>
+                        ) : (
+                          <a
+                            href="https://app.hrone.cloud/app/myprofile/calendar"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm font-medium text-link hover:underline"
+                            title="Open HROne and click your Sync Attendance bookmark"
+                          >
+                            Refresh via HROne
+                          </a>
+                        )
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setProfileOpen(true)}
+                        aria-expanded={profileOpen}
+                        aria-controls="profile-panel"
+                        className="lg:hidden inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-hairline-strong text-sm font-medium text-ink hover:bg-hairline-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.5 20.118a7.5 7.5 0 0115 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.5-1.632z" />
+                        </svg>
+                        Profile & yesterday
+                      </button>
+                    </div>
+                  </div>
 
-                  {enrichedRecords && <YesterdaySummary records={enrichedRecords} allEntries={savedEntries} />}
+                  {enrichedRecords && <TodayCard todayAttendance={effectiveTodayAttendance} shiftMinutes={todayShiftMinutes} />}
                   {dashboardMetrics && <Dashboard metrics={dashboardMetrics} />}
 
                   {tableRecords && (
@@ -985,13 +1185,86 @@ function App() {
               profileImageUrl: null,
             }}
             yesterdayRecord={yesterdayRecord}
-            todayAttendance={effectiveTodayAttendance}
-            lastSynced={lastSynced}
             appVersion={APP_VERSION}
-            onOpenPrivacy={() => setShowPrivacy(true)}
+            open={profileOpen}
+            onClose={() => setProfileOpen(false)}
+            onOpenPrivacy={() => { setProfileOpen(false); setShowPrivacy(true); }}
           />
         )}
       </div>
+
+      {empIdDialogOpen && (
+        <EmployeeIdDialog
+          onCancel={() => setEmpIdDialogOpen(false)}
+          onSubmit={(id) => { setEmpIdDialogOpen(false); startSync(id); }}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Replaces window.prompt(): inline, validated, keyboard- and screen-reader-friendly. */
+function EmployeeIdDialog({ onSubmit, onCancel }: { onSubmit: (id: number) => void; onCancel: () => void }) {
+  const [value, setValue] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onCancel(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onCancel]);
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    const trimmed = value.trim();
+    if (!/^\d{1,10}$/.test(trimmed) || Number(trimmed) <= 0) {
+      setError("Enter the numeric Employee ID from your HROne profile (digits only).");
+      return;
+    }
+    onSubmit(Number(trimmed));
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 dialog-backdrop" onClick={onCancel}>
+      <form
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="empid-title"
+        onSubmit={submit}
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-sm rounded-lg border border-hairline bg-canvas p-6 shadow-card"
+      >
+        <h2 id="empid-title" className="font-display text-xl font-medium text-ink">Your Employee ID</h2>
+        <p className="text-sm text-slate mt-1">Needed once to fetch attendance from HROne. Stored only in this browser.</p>
+        <label htmlFor="empid-input" className="block text-xs font-medium text-steel uppercase tracking-wide mt-5 mb-1.5">Employee ID</label>
+        <input
+          id="empid-input"
+          ref={inputRef}
+          inputMode="numeric"
+          autoComplete="off"
+          value={value}
+          onChange={(e) => { setValue(e.target.value); setError(null); }}
+          aria-invalid={error ? "true" : "false"}
+          aria-describedby={error ? "empid-error" : "empid-hint"}
+          placeholder="e.g. 12345"
+          className="w-full rounded-md border border-hairline-strong bg-canvas px-3 py-2 text-sm text-ink font-mono focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        />
+        {error ? (
+          <p id="empid-error" className="text-xs text-error mt-1.5">{error}</p>
+        ) : (
+          <p id="empid-hint" className="text-xs text-steel mt-1.5">HROne → My Profile. It's the number, not your employee code.</p>
+        )}
+        <div className="flex justify-end gap-2 mt-6">
+          <button type="button" onClick={onCancel} className="px-3 py-2 rounded-md text-sm font-medium text-steel hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+            Cancel
+          </button>
+          <button type="submit" className="px-4 py-2 rounded-md bg-primary text-white text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-canvas">
+            Save & sync
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

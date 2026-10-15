@@ -1,19 +1,33 @@
 import { useState, useEffect } from "react";
-import type { EmployeeProfile, EnrichedRecord, TodayAttendance } from "../types";
+import type { EmployeeProfile, EnrichedRecord } from "../types";
 import { formatMinutes, parseHHMM } from "../utils/timeCalculator";
+import { localDateDaysAgo } from "../utils/liveTime";
+import { useNow } from "../hooks/useNow";
 import { BlurReveal } from "./ui/BlurReveal";
 import { GlowCard } from "./ui/GlowCard";
 
 interface ProfilePanelProps {
   profile: EmployeeProfile;
+  /** Most recent working day before today (shown as the "Yesterday" card). */
   yesterdayRecord: EnrichedRecord | null;
-  todayAttendance: TodayAttendance | null;
-  lastSynced: string | null;
   appVersion: string;
+  /** Drawer state below the `lg` breakpoint; ignored on desktop. */
+  open: boolean;
+  onClose: () => void;
   onOpenPrivacy: () => void;
 }
 
-export default function ProfilePanel({ profile, yesterdayRecord, todayAttendance, lastSynced, appVersion, onOpenPrivacy }: ProfilePanelProps) {
+export default function ProfilePanel({ profile, yesterdayRecord, appVersion, open, onClose, onOpenPrivacy }: ProfilePanelProps) {
+  // Re-render at midnight so the "Yesterday" label stays correct.
+  const now = useNow(30000);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
   const initials = profile.employeeName
     .split(" ")
     .slice(0, 2)
@@ -22,7 +36,29 @@ export default function ProfilePanel({ profile, yesterdayRecord, todayAttendance
     .toUpperCase();
 
   return (
-    <aside className="w-72 shrink-0 flex flex-col overflow-hidden mt-14 h-[calc(100%-3.5rem)]">
+    <>
+    {/* Backdrop — drawer mode only (< lg) */}
+    {open && <div className="lg:hidden fixed inset-0 z-40 dialog-backdrop" onClick={onClose} aria-hidden="true" />}
+    <aside
+      id="profile-panel"
+      aria-label="Profile and yesterday's attendance"
+      className={`w-72 max-w-[85vw] shrink-0 flex flex-col overflow-hidden bg-canvas
+        fixed top-0 right-0 bottom-0 z-50 shadow-card transition-transform duration-300 motion-reduce:transition-none
+        ${open ? "translate-x-0" : "translate-x-full max-lg:invisible"}
+        lg:static lg:z-auto lg:translate-x-0 lg:shadow-none lg:bg-transparent lg:max-w-none lg:mt-14 lg:h-[calc(100%-3.5rem)]`}
+    >
+      <div className="lg:hidden flex justify-end px-3 pt-3">
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close profile panel"
+          className="p-2 rounded-md text-steel hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
       <div className="flex-1 overflow-y-auto p-5 space-y-6">
         {/* Employee Card */}
         <GlowCard className="rounded-lg p-5 text-center">
@@ -69,15 +105,14 @@ export default function ProfilePanel({ profile, yesterdayRecord, todayAttendance
           )}
         </div>
 
-        {/* Today's Attendance (from raw punches) */}
-        {todayAttendance ? (
+        {/* Last working day (Today lives in the main column) */}
+        {yesterdayRecord ? (
           <div className="rounded-lg border border-hairline p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[1px] text-steel mb-3">Today</p>
-            <TodayAttendanceLive todayAttendance={todayAttendance} />
-          </div>
-        ) : yesterdayRecord ? (
-          <div className="rounded-lg border border-hairline p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[1px] text-steel mb-3">Last Working Day</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[1px] text-steel mb-3">
+              {yesterdayRecord.attendanceDate === localDateDaysAgo(1, now)
+                ? "Yesterday"
+                : `Last Working Day · ${new Date(yesterdayRecord.attendanceDate + "T00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}`}
+            </p>
             {yesterdayRecord.isWorkedDay ? (
               <div className="space-y-2">
                 <div className="flex justify-between">
@@ -120,78 +155,37 @@ export default function ProfilePanel({ profile, yesterdayRecord, todayAttendance
                 )}
               </div>
             ) : (
-              <p className="text-xs text-slate">{yesterdayRecord.status} — not a working day</p>
+              <p className="text-xs text-slate">
+                {yesterdayRecord.status === "Absent"
+                  ? "Absent — no attendance recorded"
+                  : yesterdayRecord.status === "Flexi Leave" || yesterdayRecord.status === "Earned Leave" || yesterdayRecord.status === "Leave"
+                    ? `${yesterdayRecord.status} — on leave`
+                    : `${yesterdayRecord.status} — not a working day`}
+              </p>
             )}
           </div>
-        ) : null}
+        ) : (
+          <div className="rounded-lg border border-hairline p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[1px] text-steel mb-1">Yesterday</p>
+            <p className="text-xs text-slate">No working day in the last 7 days.</p>
+          </div>
+        )}
 
       </div>
 
       <div className="p-5 pt-4 bg-canvas border-t border-hairline/50 shrink-0">
-        {lastSynced && (
-          <p className="text-[10px] text-stone mb-3">
-            Last synced: {new Date(lastSynced).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
-          </p>
-        )}
         <div className="flex items-center justify-between">
           <button
             onClick={onOpenPrivacy}
-            className="text-xs font-medium text-steel hover:text-ink transition-colors"
+            className="text-xs font-medium text-steel hover:text-ink transition-colors rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
             Privacy & Data Safety
           </button>
-          <span className="text-[10px] text-muted font-mono">v{appVersion}</span>
+          <span className="text-[10px] text-stone font-mono">v{appVersion}</span>
         </div>
       </div>
     </aside>
-  );
-}
-
-function TodayAttendanceLive({ todayAttendance }: { todayAttendance: TodayAttendance }) {
-  const [now, setNow] = useState(new Date());
-
-  useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 1000); // update every second
-    return () => clearInterval(timer);
-  }, []);
-
-  // Compute worked so far live: from first punch to now
-  const [h, m] = todayAttendance.firstPunch.split(":").map(Number);
-  const firstPunchMinutes = h * 60 + m;
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
-  const workedSoFar = Math.max(0, nowMinutes - firstPunchMinutes);
-
-  // Can leave at: first punch + 9 hours
-  const leaveMinutes = firstPunchMinutes + 540;
-  const leaveH = Math.floor(leaveMinutes / 60);
-  const leaveM = leaveMinutes % 60;
-  const canLeaveAt = `${String(leaveH).padStart(2, "0")}:${String(leaveM).padStart(2, "0")}`;
-
-  return (
-    <div className="space-y-2">
-      <div className="flex justify-between">
-        <span className="text-xs text-steel">First Punch</span>
-        <span className="text-xs font-mono text-ink">{todayAttendance.firstPunch}</span>
-      </div>
-      <div className="flex justify-between">
-        <span className="text-xs text-steel">Last Punch</span>
-        <span className="text-xs font-mono text-ink">{todayAttendance.lastPunch}</span>
-      </div>
-      <div className="flex justify-between items-center">
-        <span className="text-xs text-steel">Worked So Far</span>
-        <span className="text-xs font-mono font-medium text-ink">
-          {formatMinutes(workedSoFar)}
-        </span>
-      </div>
-      <div className="flex justify-between">
-        <span className="text-xs text-steel">Punches</span>
-        <span className="text-xs text-ink">{todayAttendance.punchCount}</span>
-      </div>
-      <div className="flex justify-between pt-1 border-t border-hairline">
-        <span className="text-xs text-steel">Can leave at</span>
-        <span className="text-xs font-mono font-medium text-primary">{canLeaveAt}</span>
-      </div>
-    </div>
+    </>
   );
 }
 

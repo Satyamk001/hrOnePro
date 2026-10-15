@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { motion, AnimatePresence, useInView } from "framer-motion"
+import { motion, AnimatePresence, useInView, useReducedMotion } from "framer-motion"
 import { cn } from "../../utils/cn"
 
 interface AnimatedCounterProps {
@@ -108,6 +108,8 @@ export default function AnimatedCounter({
   const ref = useRef<HTMLSpanElement>(null)
   const isInView = useInView(ref, { once: true, margin: "-10%" })
   const prevValueRef = useRef<number | null>(null)
+  // Respect the OS "reduce motion" setting: show final digits, no rolling.
+  const reduceMotion = useReducedMotion() ?? false
 
   // Handle NaN → treat as 0
   const safeValue = Number.isNaN(value) ? 0 : value
@@ -182,7 +184,9 @@ export default function AnimatedCounter({
 
         // Determine if this specific digit should animate
         let shouldAnimate: boolean
-        if (!isActive) {
+        if (reduceMotion) {
+          shouldAnimate = false
+        } else if (!isActive) {
           // Not in view yet (first-view mode) — don't animate
           shouldAnimate = false
         } else if (isFirstView) {
@@ -199,7 +203,7 @@ export default function AnimatedCounter({
         return (
           <RollingDigit
             key={`d${el.index}`}
-            targetDigit={isActive ? el.digit : 0}
+            targetDigit={isActive || reduceMotion ? el.digit : 0}
             duration={duration}
             delay={isFirstView && isActive ? delay + el.index * 0.1 : 0}
             shouldAnimate={shouldAnimate}
