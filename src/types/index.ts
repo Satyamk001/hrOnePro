@@ -147,3 +147,14 @@ export interface TodayAttendance {
   isStillIn: boolean;
   rawPunches?: RawPunch[];
 }
+
+/**
+ * One stored month of attendance — the unit of the sidebar / localStorage.
+ */
+export interface SavedEntry {
+  /** Human label, e.g. "January 2026". */
+  label: string;
+  /** Month key "YYYY-MM". */
+  key: string;
+  records: AttendanceRecord[];
+}

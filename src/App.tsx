@@ -1,11 +1,6 @@
-import { useState, useMemo, useEffect, useCallback, useRef, type FormEvent } from "react";
-import type { AttendanceRecord, DashboardMetrics, EnrichedRecord, EmployeeProfile, TodayAttendance, RawPunch } from "./types";
-import { classifyRecord } from "./utils/classifier";
-import {
-  computeRecordMetrics,
-  computeAggregateMetrics,
-  formatMinutes,
-} from "./utils/timeCalculator";
+import { useState, useEffect, useCallback, useRef, type FormEvent } from "react";
+import type { AttendanceRecord, EmployeeProfile, SavedEntry, TodayAttendance } from "./types";
+import { formatMinutes } from "./utils/timeCalculator";
 import { generateBookmarkletCode } from "./bookmarklet";
 import Dashboard from "./components/Dashboard";
 import DayTable from "./components/DayTable";
@@ -19,15 +14,18 @@ import { ClickRipple } from "./components/ui/ClickRipple";
 import AnimatedCounter from "./components/ui/AnimatedCounter";
 import { useNow } from "./hooks/useNow";
 import { useDropletMerge } from "./hooks/useDropletMerge";
+import { useToast } from "./hooks/useToast";
+import { useTheme } from "./hooks/useTheme";
+import { useLocalStorageState } from "./hooks/useLocalStorageState";
+import { useSavedEntries } from "./features/attendance/useSavedEntries";
+import { useAttendanceMetrics } from "./features/attendance/useAttendanceMetrics";
+import { countPunchedDays, decodeStoredToday, deriveTodayAttendance } from "./features/attendance/helpers";
 import {
-  DEFAULT_SHIFT_MINUTES,
   formatRelativeAge,
   getFreshness,
   leaveAtMinutes,
-  localDateDaysAgo,
   localDateString,
   minutesToHHMM,
-  shiftLengthMinutes,
 } from "./utils/liveTime";
 import {
   APP_VERSION,
@@ -40,13 +38,11 @@ import {
   LAST_SYNCED_KEY,
   PROFILE_KEY,
   STALE_FAILURE_WINDOW_MS,
-  STORAGE_KEY,
   SYNC_TIMEOUT_MS,
-  THEME_KEY,
   TODAY_KEY,
   USER_KEY,
 } from "./utils/config";
-import { readEmpId, readJSON, readString, removeKey, writeJSON, writeString } from "./utils/storage";
+import { readEmpId, readString, writeString } from "./utils/storage";
 import {
   dispatchSyncRequest,
   EXTENSION_EVENTS,
@@ -61,121 +57,10 @@ import {
 // Module-level so React StrictMode's double-invoked effects (dev) and
 // remounts can't fire two auto-syncs that race each other in the extension.
 let autoSyncRequested = false;
-interface SavedEntry { label: string; key: string; records: AttendanceRecord[]; }
-
-function deriveMonthKey(records: AttendanceRecord[]): string {
-  const monthCounts: Record<string, number> = {};
-  for (const r of records) {
-    const dateOnly = r.attendanceDate.split("T")[0];
-    const monthKey = dateOnly.substring(0, 7);
-    monthCounts[monthKey] = (monthCounts[monthKey] || 0) + 1;
-  }
-  let maxKey = "", maxCount = 0;
-  for (const [key, count] of Object.entries(monthCounts)) {
-    if (count > maxCount) { maxCount = count; maxKey = key; }
-  }
-  return maxKey;
-}
-
-function formatMonthLabel(key: string): string {
-  const [year, month] = key.split("-");
-  return new Date(Number(year), Number(month) - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
-}
-
-function normalizeRecords(records: AttendanceRecord[]): AttendanceRecord[] {
-  return records.map((r) => ({ ...r, attendanceDate: r.attendanceDate.split("T")[0] }));
-}
-
-/**
- * Derive today's live attendance from raw HROne punches. Shared by both the
- * extension (TodayPunchesFromExtension event) and the bookmarklet (postMessage
- * with todayPunches) so the "Today" card behaves identically for both paths.
- * Returns null when there are no usable punches for today.
- */
-function deriveTodayAttendance(rawPunches: RawPunch[]): TodayAttendance | null {
-  if (!Array.isArray(rawPunches) || rawPunches.length === 0) return null;
-  const punches = rawPunches
-    .filter((p) => !p.isPunchExcluded)
-    .sort((a, b) => a.punchDateTime.localeCompare(b.punchDateTime));
-  if (punches.length === 0) return null;
-
-  const firstPunch = punches[0].punchDateTime;
-  const lastPunch = punches[punches.length - 1].punchDateTime;
-  const firstTime = new Date(firstPunch);
-  const lastTime = new Date(lastPunch);
-  const now = new Date();
-  // Only treat these as "today" if the punches are from today — compared in
-  // LOCAL time, not UTC. HROne punch timestamps read as the user's local day;
-  // a UTC comparison wrongly rejects valid punches near the day boundary
-  // (e.g. evening in IST is already the next day in UTC).
-  const localDate = (d: Date) =>
-    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  const date = localDate(firstTime);
-  if (date !== localDate(now)) return null;
-  // Worked so far = from first punch to now (regardless of punch count)
-  const workedMs = now.getTime() - firstTime.getTime();
-  const workedMinutesSoFar = Math.max(0, Math.floor(workedMs / 60000));
-  // Still "in" when there's an odd number of punches
-  const isStillIn = punches.length % 2 !== 0;
-
-  const formatHHMM = (d: Date) =>
-    `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-
-  return {
-    date,
-    firstPunch: formatHHMM(firstTime),
-    lastPunch: formatHHMM(lastTime),
-    punchCount: punches.length,
-    workedMinutesSoFar,
-    isStillIn,
-    rawPunches: punches,
-  };
-}
-
-function loadSavedEntries(): SavedEntry[] {
-  return readJSON<SavedEntry[]>(STORAGE_KEY) ?? [];
-}
-
-function saveTolocalStorage(entries: SavedEntry[]) { writeJSON(STORAGE_KEY, entries); }
 
 /** Smooth scrolling unless the user asked the OS for reduced motion. */
 function scrollBehavior(): ScrollBehavior {
   return typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
-}
-
-const NON_WORKING_STATUSES = new Set(["Week Off", "Holiday"]);
-
-/** Walk backwards from yesterday up to 7 days to find the most recent working day record */
-function findLastWorkingDayRecord(
-  enrichedRecords: EnrichedRecord[] | null,
-  allEntries: SavedEntry[],
-  now: Date = new Date()
-): { record: EnrichedRecord; date: string; daysAgo: number } | null {
-  for (let daysBack = 1; daysBack <= 7; daysBack++) {
-    // Local date — UTC would point at the wrong day before 05:30 IST.
-    const dateStr = localDateDaysAgo(daysBack, now);
-
-    let rec: EnrichedRecord | undefined;
-
-    if (enrichedRecords) {
-      rec = enrichedRecords.find((r) => r.attendanceDate === dateStr);
-    }
-
-    if (!rec && allEntries.length > 0) {
-      for (const entry of allEntries) {
-        const match = entry.records
-          .map((r) => ({ ...r, attendanceDate: r.attendanceDate.split("T")[0] }))
-          .find((r) => r.attendanceDate === dateStr);
-        if (match) { rec = computeRecordMetrics(classifyRecord(match)); break; }
-      }
-    }
-
-    if (!rec) continue;
-    // If this day is a non-working day, skip and keep looking
-    if (NON_WORKING_STATUSES.has(rec.status)) continue;
-    return { record: rec, date: dateStr, daysAgo: daysBack };
-  }
-  return null;
 }
 
 function PaddedCounter({ value, ...props }: { value: number; duration: number; continuous: boolean; separator: boolean; className?: string }) {
@@ -336,26 +221,25 @@ function LiveClock({ todayAttendance, shiftMinutes }: { todayAttendance: TodayAt
 }
 
 function App() {
-  const [savedEntries, setSavedEntries] = useState<SavedEntry[]>(loadSavedEntries);
-  const [activeKey, setActiveKey] = useState<string | null>(() => {
-    const entries = loadSavedEntries();
-    if (!entries.length) return null;
-    return [...entries].sort((a, b) => b.key.localeCompare(a.key))[0].key;
+  const {
+    entries: savedEntries,
+    sortedEntries,
+    activeKey,
+    setActiveKey,
+    upsertMonth,
+    restoreEntry,
+  } = useSavedEntries();
+  const [userName, setUserName] = useLocalStorageState(USER_KEY, "", {
+    decode: (raw) => raw,
+    encode: (v) => v,
   });
-  const sortedEntries = useMemo(() => {
-    return savedEntries.slice().sort((a, b) => b.key.localeCompare(a.key));
-  }, [savedEntries]);
-  const [userName, setUserName] = useState(() => readString(USER_KEY) || "");
   const [showAllDays, setShowAllDays] = useState(false);
-  const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains("dark"));
-  const [toast, setToast] = useState<string | null>(null);
-  const toastTimerRef = useRef<number | undefined>(undefined);
-  const showToast = useCallback((msg: string, ms = 3000) => {
-    window.clearTimeout(toastTimerRef.current);
-    setToast(msg);
-    toastTimerRef.current = window.setTimeout(() => setToast(null), ms);
-  }, []);
-  const [lastSynced, setLastSynced] = useState<string | null>(() => readString(LAST_SYNCED_KEY));
+  const { isDark, toggleTheme } = useTheme();
+  const { toast, showToast } = useToast();
+  const [lastSynced, setLastSynced] = useLocalStorageState<string | null>(LAST_SYNCED_KEY, null, {
+    decode: (raw) => raw,
+    encode: (v) => v,
+  });
   const [extensionAvailable, setExtensionAvailable] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const syncingRef = useRef(false);
@@ -381,19 +265,15 @@ function App() {
   // "synced X ago" roll over without a reload.
   const now = useNow(30000);
   const today = localDateString(now);
-  const [todayAttendance, setTodayAttendance] = useState<TodayAttendance | null>(() => {
-    // Rehydrate today's punches from the last successful sync — but only if the
-    // stored data is actually for today (LOCAL date), so stale punches from a
-    // previous day don't linger.
-    const stored = readJSON<TodayAttendance>(TODAY_KEY);
-    return stored && stored.date === localDateString() ? stored : null;
-  });
+  const [todayAttendance, setTodayAttendance, { clear: clearTodayAttendance }] = useLocalStorageState<TodayAttendance | null>(
+    TODAY_KEY,
+    null,
+    { decode: decodeStoredToday }
+  );
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [hasUpdate, setHasUpdate] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
-  const [employeeProfile, setEmployeeProfile] = useState<EmployeeProfile | null>(
-    () => readJSON<EmployeeProfile>(PROFILE_KEY)
-  );
+  const [employeeProfile, setEmployeeProfile] = useLocalStorageState<EmployeeProfile | null>(PROFILE_KEY, null);
 
   // Version check — detect new app/extension versions and prompt update
   useEffect(() => {
@@ -414,55 +294,9 @@ function App() {
   // Midnight rollover: yesterday's live punches must not keep showing as "Today".
   useEffect(() => {
     if (todayAttendance && todayAttendance.date !== today) {
-      setTodayAttendance(null);
-      removeKey(TODAY_KEY);
+      clearTodayAttendance();
     }
-  }, [today, todayAttendance]);
-
-  // Cross-tab sync: a sync (or theme change) in another tab updates this one.
-  // The `storage` event only fires in OTHER tabs and only when the value
-  // actually changes, so writing back the same data can't loop.
-  useEffect(() => {
-    const parse = <T,>(v: string | null): T | null => {
-      if (!v) return null;
-      try { return JSON.parse(v) as T; } catch { return null; }
-    };
-    const onStorage = (e: StorageEvent) => {
-      if (e.storageArea !== localStorage) return;
-      switch (e.key) {
-        case STORAGE_KEY: {
-          const entries = parse<SavedEntry[]>(e.newValue) ?? [];
-          setSavedEntries(entries);
-          setActiveKey((prev) =>
-            prev && entries.some((x) => x.key === prev)
-              ? prev
-              : entries.length ? [...entries].sort((a, b) => b.key.localeCompare(a.key))[0].key : null
-          );
-          break;
-        }
-        case LAST_SYNCED_KEY: setLastSynced(e.newValue); break;
-        case PROFILE_KEY: setEmployeeProfile(parse<EmployeeProfile>(e.newValue)); break;
-        case USER_KEY: setUserName(e.newValue || ""); break;
-        case TODAY_KEY: {
-          const t = parse<TodayAttendance>(e.newValue);
-          setTodayAttendance(t && t.date === localDateString() ? t : null);
-          break;
-        }
-        case THEME_KEY: {
-          const dark = e.newValue === "dark";
-          document.documentElement.classList.toggle("dark", dark);
-          setIsDark(dark);
-          break;
-        }
-        case null: // localStorage.clear() in another tab
-          setSavedEntries([]); setActiveKey(null); setLastSynced(null);
-          setEmployeeProfile(null); setTodayAttendance(null);
-          break;
-      }
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
+  }, [today, todayAttendance, clearTodayAttendance]);
 
   const appUrl = window.location.origin;
   const bookmarkletCode = generateBookmarkletCode(appUrl, BOOKMARKLET_VERSION);
@@ -563,15 +397,6 @@ function App() {
     }
   }, [activeKey]);
 
-  const attendanceData = useMemo(() => {
-    if (!activeKey) return null;
-    return savedEntries.find((e) => e.key === activeKey)?.records ?? null;
-  }, [activeKey, savedEntries]);
-
-  useEffect(() => { saveTolocalStorage(savedEntries); }, [savedEntries]);
-  const savedEntriesRef = useRef(savedEntries);
-  savedEntriesRef.current = savedEntries;
-
   const finishSync = useCallback(() => {
     syncingRef.current = false;
     setSyncing(false);
@@ -579,46 +404,24 @@ function App() {
   }, []);
 
   const handleDataParsed = useCallback((data: AttendanceRecord[]) => {
-    if (!Array.isArray(data) || data.length === 0) return;
-    if (!data[0].attendanceDate) return;
+    const result = upsertMonth(data);
+    if (!result) return;
 
     // Save employee ID for future Sync Now use
     if (data[0].employeeId) {
       writeString(EMP_ID_KEY, String(data[0].employeeId));
     }
 
-    const normalized = normalizeRecords(data);
-    const monthKey = deriveMonthKey(normalized);
-    const label = formatMonthLabel(monthKey);
+    setLastSynced(new Date().toISOString());
 
-    // Re-syncing replaces the stored month. If the new data has fewer days or
-    // fewer punched days (e.g. HROne returned a partial response), keep the
-    // previous copy so the user can undo instead of silently losing data.
-    const previous = savedEntriesRef.current.find((e) => e.key === monthKey);
-    const punched = (rs: AttendanceRecord[]) => rs.filter((r) => r.timeIn).length;
-    const shrank = previous && (
-      normalized.length < previous.records.length || punched(normalized) < punched(previous.records)
-    );
-
-    setSavedEntries((prev) => {
-      const idx = prev.findIndex((e) => e.key === monthKey);
-      if (idx >= 0) { const u = [...prev]; u[idx] = { label, key: monthKey, records: normalized }; return u; }
-      return [...prev, { label, key: monthKey, records: normalized }];
-    });
-    setActiveKey(monthKey);
-
-    const syncedAt = new Date().toISOString();
-    setLastSynced(syncedAt);
-    writeString(LAST_SYNCED_KEY, syncedAt);
-
-    if (shrank && previous) {
+    if (result.shrank && result.previous) {
       setUndoEntry({
-        entry: previous,
-        message: `Re-sync replaced ${label}: ${punched(previous.records)} → ${punched(normalized)} punched days.`,
+        entry: result.previous,
+        message: `Re-sync replaced ${result.label}: ${countPunchedDays(result.previous.records)} → ${result.punchedCount} punched days.`,
       });
     } else {
       setUndoEntry(null);
-      showToast(`Synced ${label} — ${normalized.length} days`);
+      showToast(`Synced ${result.label} — ${result.recordCount} days`);
     }
     setSyncError(null);
     lastDataAtRef.current = Date.now();
@@ -629,16 +432,15 @@ function App() {
     // programmatically for a non-manifest host), which would otherwise leave
     // the Sync button disabled even though sync just succeeded.
     setExtensionAvailable(true);
-  }, [showToast, finishSync]);
+  }, [upsertMonth, showToast, finishSync]);
 
   const handleUndoResync = useCallback(() => {
     if (!undoEntry) return;
     const { entry } = undoEntry;
-    setSavedEntries((prev) => prev.map((e) => (e.key === entry.key ? entry : e)));
-    setActiveKey(entry.key);
+    restoreEntry(entry);
     setUndoEntry(null);
     showToast(`Restored previous ${entry.label} data`);
-  }, [undoEntry, showToast]);
+  }, [undoEntry, restoreEntry, showToast]);
 
   useEffect(() => {
     const h = (event: Event) => { const e = event as CustomEvent<AttendanceDataDetail>; if (e.detail?.records) handleDataParsed(e.detail.records); };
@@ -652,10 +454,8 @@ function App() {
       const e = event as CustomEvent<ProfileDataDetail>;
       if (e.detail?.profile) {
         setEmployeeProfile(e.detail.profile);
-        writeJSON(PROFILE_KEY, e.detail.profile);
         if (e.detail.profile.employeeName) {
           setUserName(e.detail.profile.employeeName);
-          writeString(USER_KEY, e.detail.profile.employeeName);
         }
       }
     };
@@ -670,8 +470,6 @@ function App() {
       const todayData = deriveTodayAttendance(e.detail?.punches ?? []);
       if (todayData) {
         setTodayAttendance(todayData);
-        // Persist so the "Today" card survives reloads and HROne slowness
-        try { writeJSON(TODAY_KEY, todayData); } catch { /* ignore */ }
       }
     };
     window.addEventListener(EXTENSION_EVENTS.todayPunches, h);
@@ -800,11 +598,10 @@ function App() {
       if (!isBookmarkletMessage(event)) return;
       const { records, userName: incomingName, profile, todayPunches, v } = event.data;
       handleDataParsed(records);
-      if (incomingName) { setUserName(incomingName); writeString(USER_KEY, incomingName); }
+      if (incomingName) { setUserName(incomingName); }
       // Handle profile data
       if (profile) {
         setEmployeeProfile(profile);
-        writeJSON(PROFILE_KEY, profile);
       }
       // Track bookmarklet version
       if (v) {
@@ -817,7 +614,6 @@ function App() {
         const todayData = deriveTodayAttendance(todayPunches);
         if (todayData) {
           setTodayAttendance(todayData);
-          try { writeJSON(TODAY_KEY, todayData); } catch { /* ignore */ }
         }
       }
     };
@@ -825,76 +621,16 @@ function App() {
     return () => window.removeEventListener("message", h);
   }, [handleDataParsed]);
 
-  const classifiedRecords = useMemo(() => attendanceData?.map(classifyRecord) ?? null, [attendanceData]);
-  const enrichedRecords = useMemo(() => classifiedRecords?.map(computeRecordMetrics) ?? null, [classifiedRecords]);
-  const dashboardMetrics = useMemo<DashboardMetrics | null>(() => {
-    if (!classifiedRecords) return null;
-    const a = computeAggregateMetrics(classifiedRecords);
-    return { ...a, formattedTotalHours: formatMinutes(a.totalWorkingMinutes), formattedExtraHours: formatMinutes(a.totalExtraMinutes), formattedShortfall: formatMinutes(a.totalShortfallMinutes), formattedAverage: formatMinutes(a.averageWorkMinutes) };
-  }, [classifiedRecords]);
-
-  const tableRecords = useMemo(() => {
-    if (!enrichedRecords) return null;
-    return showAllDays ? enrichedRecords : enrichedRecords.filter((r) => r.isWorkedDay);
-  }, [enrichedRecords, showAllDays]);
-
-  const activeLabel = savedEntries.find((e) => e.key === activeKey)?.label;
-
-  // Compute last working day record for the profile panel
-  const yesterdayRecord = useMemo<EnrichedRecord | null>(() => {
-    const result = findLastWorkingDayRecord(enrichedRecords, savedEntries, new Date());
-    return result ? result.record : null;
-    // `today` re-runs this at midnight so "yesterday" moves forward.
-  }, [enrichedRecords, savedEntries, today]);
-
-  // Today's record straight from the Calendar data (today's row is included in
-  // the monthly records). This is the fallback source for the "Today" card when
-  // there's no live RawPunch data (e.g. the bookmarklet path, or before punches
-  // load). Prefer the live `todayAttendance` when available since it updates
-  // intraday; otherwise synthesize a TodayAttendance from today's record.
-  const todayRecord = useMemo<EnrichedRecord | null>(() => {
-    if (enrichedRecords) {
-      const rec = enrichedRecords.find((r) => r.attendanceDate === today);
-      if (rec) return rec;
-    }
-    // Today may live in a different month entry than the one being viewed.
-    for (const entry of savedEntries) {
-      const match = entry.records.find((r) => r.attendanceDate.split("T")[0] === today);
-      if (match) return computeRecordMetrics(classifyRecord({ ...match, attendanceDate: today }));
-    }
-    return null;
-  }, [enrichedRecords, savedEntries, today]);
-
-  const effectiveTodayAttendance = useMemo<TodayAttendance | null>(() => {
-    if (todayAttendance && todayAttendance.date === today) return todayAttendance;
-    const rec = todayRecord;
-    // Only show a Today card if the person actually punched in today.
-    if (!rec || !rec.timeIn) return null;
-    return {
-      date: today,
-      firstPunch: rec.timeIn,
-      lastPunch: rec.timeout ?? rec.timeIn,
-      punchCount: rec.timeout ? 2 : 1,
-      workedMinutesSoFar: rec.workedMinutes,
-      isStillIn: !rec.timeout,
-    };
-  }, [todayAttendance, todayRecord, today]);
-
-  // Shift length for "Can leave at": today's scheduled shift from HROne, else
-  // the most recent day that has shift times, else the 9h GEN default.
-  const todayShiftMinutes = useMemo<number>(() => {
-    const fromToday = todayRecord ? shiftLengthMinutes(todayRecord.shiftStartTime, todayRecord.shiftEndTime) : null;
-    if (fromToday) return fromToday;
-    const all = savedEntries
-      .flatMap((e) => e.records)
-      .filter((r) => r.shiftStartTime && r.shiftEndTime && r.attendanceDate.split("T")[0] <= today)
-      .sort((a, b) => b.attendanceDate.localeCompare(a.attendanceDate));
-    for (const r of all) {
-      const len = shiftLengthMinutes(r.shiftStartTime, r.shiftEndTime);
-      if (len) return len;
-    }
-    return DEFAULT_SHIFT_MINUTES;
-  }, [todayRecord, savedEntries, today]);
+  const {
+    attendanceData,
+    enrichedRecords,
+    dashboardMetrics,
+    tableRecords,
+    activeLabel,
+    yesterdayRecord,
+    effectiveTodayAttendance,
+    todayShiftMinutes,
+  } = useAttendanceMetrics({ entries: savedEntries, activeKey, today, todayAttendance, showAllDays });
 
   const freshness = getFreshness(lastSynced, now);
   const syncedAgo = formatRelativeAge(lastSynced, now);
@@ -965,15 +701,7 @@ function App() {
               width={56}
               height={28}
               orbSize={24}
-              onToggle={() => {
-                const html = document.documentElement;
-                html.classList.add("theme-transitioning");
-                const newDark = !isDark;
-                if (newDark) { html.classList.add("dark"); } else { html.classList.remove("dark"); }
-                writeString(THEME_KEY, newDark ? "dark" : "light");
-                setIsDark(newDark);
-                setTimeout(() => html.classList.remove("theme-transitioning"), 500);
-              }}
+              onToggle={toggleTheme}
             />
 
             {/* Divider */}
