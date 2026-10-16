@@ -185,8 +185,6 @@ function LiveClock({ todayAttendance, shiftMinutes }: { todayAttendance: TodayAt
   let timeLeftDisplay: string | null = null;
   let shiftComplete = false;
   let workedValueDisplay: string | null = null;
-  let punchesCountDisplay: number | null = null;
-  let shiftValueDisplay: string | null = null;
   let canLeaveDisplay: string | null = null;
 
   if (todayAttendance?.firstPunch) {
@@ -194,12 +192,6 @@ function LiveClock({ todayAttendance, shiftMinutes }: { todayAttendance: TodayAt
     const nowMinutes = now.getHours() * 60 + now.getMinutes();
     const workedSoFar = Math.max(0, nowMinutes - (h * 60 + m));
     workedValueDisplay = formatMinutes(workedSoFar);
-
-    punchesCountDisplay = todayAttendance.punchCount;
-
-    const shiftH = Math.floor(shiftMinutes / 60);
-    const shiftM = shiftMinutes % 60;
-    shiftValueDisplay = shiftM > 0 ? `${shiftH}h ${shiftM}m` : `${shiftH}h`;
 
     const leaveMinutes = leaveAtMinutes(todayAttendance.firstPunch, shiftMinutes);
     if (leaveMinutes !== null) {
@@ -256,8 +248,8 @@ function LiveClock({ todayAttendance, shiftMinutes }: { todayAttendance: TodayAt
       {/* EXPANDED TODAY SUMMARY: reveals progressively as clock pill absorbs Today card */}
       {todayAttendance?.firstPunch && (
         <span className="clock-expanded-section inline-flex items-center">
-          {/* Metric 1: Worked so far */}
-          <span className="clock-expanded-item clock-item-worked inline-flex items-center shrink-0">
+          {/* Metric 1: Punch in (shown first) */}
+          <span className="clock-expanded-item clock-item-punchin inline-flex items-center shrink-0">
             <span className="clock-pill-divider" aria-hidden="true" />
             <span
               className={`w-1.5 h-1.5 rounded-full mr-1.5 shrink-0 ${
@@ -267,39 +259,47 @@ function LiveClock({ todayAttendance, shiftMinutes }: { todayAttendance: TodayAt
               }`}
               aria-hidden="true"
             />
-            <span className="text-xs font-mono font-semibold text-ink tabular-nums">
-              {workedValueDisplay}
+            <span className="text-[11px] text-steel font-normal mr-1.5 hidden min-[440px]:inline">
+              Punch in :
             </span>
-            <span className="text-[11px] text-steel font-normal ml-1">worked</span>
+            <span className="text-[11px] text-steel font-normal mr-1 min-[440px]:hidden">
+              In :
+            </span>
+            <span className="text-xs font-mono font-semibold text-ink tabular-nums">
+              {todayAttendance.firstPunch}
+            </span>
           </span>
 
-          {/* Metric 2: Punches (Desktop only) */}
-          {punchesCountDisplay !== null && (
-            <span className="clock-expanded-item clock-item-punches hidden md:inline-flex items-center shrink-0">
+          {/* Metric 2: Time left in shift */}
+          {timeLeftDisplay && (
+            <span className="clock-expanded-item clock-item-left inline-flex items-center shrink-0">
               <span className="clock-pill-divider" aria-hidden="true" />
-              <span className="text-xs font-mono font-semibold text-ink tabular-nums">
-                {punchesCountDisplay}
-              </span>
-              <span className="text-[11px] text-steel font-normal ml-1">
-                {punchesCountDisplay === 1 ? "punch" : "punches"}
+              <span
+                className={`text-xs font-mono font-semibold tabular-nums ${
+                  shiftComplete
+                    ? "text-emerald-600 dark:text-emerald-400"
+                    : "text-primary"
+                }`}
+              >
+                {timeLeftDisplay}
               </span>
             </span>
           )}
 
-          {/* Metric 3: Shift (Tablet + Desktop) */}
-          {shiftValueDisplay && (
-            <span className="clock-expanded-item clock-item-shift hidden sm:inline-flex items-center shrink-0">
+          {/* Metric 3: Worked so far (Tablet + Desktop) */}
+          {workedValueDisplay && (
+            <span className="clock-expanded-item clock-item-worked hidden sm:inline-flex items-center shrink-0">
               <span className="clock-pill-divider" aria-hidden="true" />
               <span className="text-xs font-mono font-semibold text-ink tabular-nums">
-                {shiftValueDisplay}
+                {workedValueDisplay}
               </span>
-              <span className="text-[11px] text-steel font-normal ml-1">shift</span>
+              <span className="text-[11px] text-steel font-normal ml-1">worked</span>
             </span>
           )}
 
-          {/* Metric 4: Can leave at */}
+          {/* Metric 4: Can leave at (Desktop) */}
           {canLeaveDisplay && (
-            <span className="clock-expanded-item clock-item-leave inline-flex items-center shrink-0">
+            <span className="clock-expanded-item clock-item-leave hidden md:inline-flex items-center shrink-0">
               <span className="clock-pill-divider" aria-hidden="true" />
               <span className="text-[11px] text-steel font-normal mr-1">leave</span>
               <span
@@ -344,6 +344,7 @@ function App() {
 
   // Droplet Merge — Liquid sticky header animation refs
   const mainRef = useRef<HTMLElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
   const clockPillRef = useRef<HTMLDivElement>(null);
   const todayCardPlaceholderRef = useRef<HTMLDivElement>(null);
   const morphingDropletRef = useRef<HTMLDivElement>(null);
@@ -894,6 +895,7 @@ function App() {
 
   useDropletMerge({
     mainRef,
+    headerRef,
     clockPillRef,
     placeholderRef: todayCardPlaceholderRef,
     morphingRef: morphingDropletRef,
@@ -905,7 +907,7 @@ function App() {
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-canvas relative">
       {/* Glassmorphism Three-Pill Navigation */}
-      <header className="topbar absolute top-0 left-0 right-0 z-30 pointer-events-none">
+      <header ref={headerRef} className="topbar absolute top-0 left-0 right-0 z-30 pointer-events-none">
         <div className="topbar-shell pointer-events-auto">
 
           {/* Pill 1 — Brand / User (Left) */}
@@ -1075,7 +1077,7 @@ function App() {
         </aside>
 
         {/* Main */}
-        <main ref={mainRef} className="flex-1 overflow-y-auto scrollbar-hidden pt-10">
+        <main ref={mainRef} className="flex-1 overflow-y-auto scrollbar-hidden pt-10 top-aperture-fade">
           {showPrivacy ? (
             <PrivacyPage onBack={() => setShowPrivacy(false)} />
           ) : (
@@ -1282,18 +1284,18 @@ function App() {
 
                   {tableRecords && (
                     <section>
-                      <div className="flex items-center justify-between mb-4">
+                      <div className="sticky top-[58px] z-20 flex items-center justify-between mb-2 py-2 px-3 -mx-3 rounded-lg backdrop-blur-md bg-canvas/85 border border-transparent table-dock-header">
                         <p className="text-[11px] font-semibold uppercase tracking-[1px] text-steel">
                           {showAllDays ? "All Days" : "Worked Days"}
                         </p>
                         <button
                           onClick={() => setShowAllDays(!showAllDays)}
-                          className="text-sm text-link hover:underline font-medium"
+                          className="text-sm text-link hover:underline font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded"
                         >
                           {showAllDays ? "Show worked only" : "Show all days"}
                         </button>
                       </div>
-                      <div className="rounded-lg border border-hairline overflow-hidden bg-canvas shadow-card">
+                      <div className="rounded-lg border border-hairline bg-canvas shadow-card">
                         <DayTable records={tableRecords} />
                       </div>
                     </section>

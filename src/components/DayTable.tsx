@@ -78,18 +78,22 @@ export default function DayTable({ records }: DayTableProps) {
   }
 
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto md:overflow-x-visible">
       <table className="w-full text-left">
-        <thead>
+        <thead className="sticky top-[96px] z-10">
           <tr className="border-b border-hairline bg-surface">
-            {COLUMNS.map((col) => {
+            {COLUMNS.map((col, idx) => {
               const isActive = sortState.column === col.key;
               const isAsc = isActive && sortState.direction === "asc";
               const isDesc = isActive && sortState.direction === "desc";
+              const isFirst = idx === 0;
+              const isLast = idx === COLUMNS.length - 1;
               return (
                 <th
                   key={col.key}
-                  className="px-4 py-3 text-[11px] font-semibold text-steel uppercase tracking-wide cursor-pointer select-none hover:text-ink transition-colors whitespace-nowrap group"
+                  className={`sticky top-[96px] z-10 bg-surface px-4 py-3 text-[11px] font-semibold text-steel uppercase tracking-wide cursor-pointer select-none hover:text-ink transition-colors whitespace-nowrap group shadow-[0_1px_0_var(--color-hairline)] ${
+                    isFirst ? "rounded-tl-lg" : ""
+                  } ${isLast ? "rounded-tr-lg" : ""}`}
                   onClick={() => handleColumnClick(col.key)}
                   aria-sort={getAriaSort(col.key)}
                   title={`Sort by ${col.label}`}
@@ -124,30 +128,33 @@ export default function DayTable({ records }: DayTableProps) {
           </tr>
         </thead>
         <tbody>
-          {sortedRecords.map((record, idx) => (
-            <tr
-              key={`${record.attendanceDate}-${idx}`}
-              className={`border-b border-hairline transition-colors ${
-                record.isLateArrival
-                  ? "bg-[#fef9ec] dark:bg-[#2a2000]"
-                  : record.extraDeficitMinutes < 0 && record.isWorkedDay
-                  ? "bg-[#fef2f2] dark:bg-[#2a0000]"
-                  : "hover:bg-hairline-soft"
-              }`}
-            >
-              <td className="px-4 py-3 text-sm text-ink font-medium whitespace-nowrap">{record.attendanceDate}</td>
-              <td className="px-4 py-3 text-sm text-charcoal whitespace-nowrap">{getDayOfWeek(record.attendanceDate)}</td>
-              <td className="px-4 py-3 text-sm text-charcoal whitespace-nowrap">{record.status}</td>
-              <td className="px-4 py-3 text-sm text-charcoal whitespace-nowrap font-mono">{record.timeIn ?? <span className="text-stone">—</span>}</td>
-              <td className="px-4 py-3 text-sm text-charcoal whitespace-nowrap font-mono">{record.timeout ?? <span className="text-stone">—</span>}</td>
-              <td className="px-4 py-3 text-sm text-ink whitespace-nowrap font-mono">{formatMinutes(record.workedMinutes)}</td>
-              <td className="px-4 py-3 text-sm text-steel whitespace-nowrap font-mono">{formatMinutes(record.shiftDurationMinutes)}</td>
-              <td className="px-4 py-3 text-sm whitespace-nowrap font-mono">{renderExtraDeficit(record)}</td>
-              <td className="px-4 py-3 text-sm whitespace-nowrap">
-                {record.isLateArrival ? <span className="text-warning font-medium">Late</span> : ""}
-              </td>
-            </tr>
-          ))}
+          {sortedRecords.map((record, idx) => {
+            const isLastRow = idx === sortedRecords.length - 1;
+            return (
+              <tr
+                key={`${record.attendanceDate}-${idx}`}
+                className={`border-b last:border-b-0 border-hairline transition-colors ${
+                  record.isLateArrival
+                    ? "bg-[#fef9ec] dark:bg-[#2a2000]"
+                    : record.extraDeficitMinutes < 0 && record.isWorkedDay
+                    ? "bg-[#fef2f2] dark:bg-[#2a0000]"
+                    : "hover:bg-hairline-soft"
+                }`}
+              >
+                <td className={`px-4 py-3 text-sm text-ink font-medium whitespace-nowrap ${isLastRow ? "rounded-bl-lg" : ""}`}>{record.attendanceDate}</td>
+                <td className="px-4 py-3 text-sm text-charcoal whitespace-nowrap">{getDayOfWeek(record.attendanceDate)}</td>
+                <td className="px-4 py-3 text-sm text-charcoal whitespace-nowrap">{record.status}</td>
+                <td className="px-4 py-3 text-sm text-charcoal whitespace-nowrap font-mono">{record.timeIn ?? <span className="text-stone">—</span>}</td>
+                <td className="px-4 py-3 text-sm text-charcoal whitespace-nowrap font-mono">{record.timeout ?? <span className="text-stone">—</span>}</td>
+                <td className="px-4 py-3 text-sm text-ink whitespace-nowrap font-mono">{formatMinutes(record.workedMinutes)}</td>
+                <td className="px-4 py-3 text-sm text-steel whitespace-nowrap font-mono">{formatMinutes(record.shiftDurationMinutes)}</td>
+                <td className="px-4 py-3 text-sm whitespace-nowrap font-mono">{renderExtraDeficit(record)}</td>
+                <td className={`px-4 py-3 text-sm whitespace-nowrap ${isLastRow ? "rounded-br-lg" : ""}`}>
+                  {record.isLateArrival ? <span className="text-warning font-medium">Late</span> : ""}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

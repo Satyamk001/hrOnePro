@@ -285,6 +285,65 @@ html.theme-transitioning *::after {
     inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
+/* Elevated Glass Pills on Scroll */
+.topbar[data-scrolled="true"] .glass-pill {
+  background: color-mix(
+    in srgb,
+    white 88%,
+    transparent
+  );
+  border-color: color-mix(
+    in srgb,
+    var(--color-hairline) 90%,
+    transparent
+  );
+  box-shadow:
+    0 4px 16px rgba(28, 25, 23, 0.07),
+    0 12px 32px -4px rgba(28, 25, 23, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.topbar[data-scrolled="true"] .glass-pill:hover {
+  border-color: color-mix(
+    in srgb,
+    var(--color-hairline-strong) 85%,
+    transparent
+  );
+  box-shadow:
+    0 6px 20px rgba(28, 25, 23, 0.09),
+    0 16px 36px -4px rgba(28, 25, 23, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+.dark .topbar[data-scrolled="true"] .glass-pill {
+  background: color-mix(
+    in srgb,
+    var(--color-surface) 84%,
+    transparent
+  );
+  border-color: color-mix(
+    in srgb,
+    var(--color-hairline-strong) 65%,
+    transparent
+  );
+  box-shadow:
+    0 6px 20px rgba(0, 0, 0, 0.36),
+    0 14px 36px -4px rgba(0, 0, 0, 0.30),
+    inset 0 1px 0 rgba(255, 255, 255, 0.10);
+}
+
+.dark .topbar[data-scrolled="true"] .glass-pill:hover {
+  border-color: color-mix(
+    in srgb,
+    var(--color-hairline-strong) 85%,
+    transparent
+  );
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.40),
+    0 18px 40px -4px rgba(0, 0, 0, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
 /* Keep the three existing pills balanced without changing their markup. */
 .topbar-shell {
   display: grid;
@@ -595,6 +654,61 @@ html.theme-transitioning *::after {
   );
 }
 
+/* Main content top aperture fade — cards dissolve gracefully over top 36px before reaching screen edge */
+.top-aperture-fade {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0px,
+    black 36px,
+    black 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0px,
+    black 36px,
+    black 100%
+  );
+}
+
+/* Metric card tactile interaction */
+.metric-cell {
+  transition:
+    transform 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 160ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform, box-shadow;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .metric-cell:hover {
+    transform: translateY(-2px);
+    box-shadow:
+      0 6px 16px -2px rgba(28, 25, 23, 0.06),
+      0 2px 6px -1px rgba(28, 25, 23, 0.04);
+    border-color: var(--color-hairline-strong);
+  }
+
+  .dark .metric-cell:hover {
+    box-shadow:
+      0 8px 20px -2px rgba(0, 0, 0, 0.35),
+      0 2px 6px rgba(0, 0, 0, 0.2);
+  }
+}
+
+.metric-cell:active {
+  transform: translateY(0px) scale(0.99);
+  transition-duration: 100ms;
+}
+
+/* DayTable Sticky Dock Header */
+.table-dock-header {
+  box-shadow: 0 0 0 transparent;
+  transition:
+    box-shadow 200ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 200ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 .glow-card {
   box-shadow: 0 0 0 0 transparent;
   transition: box-shadow 300ms ease, transform 200ms ease;
@@ -659,7 +773,7 @@ html.theme-transitioning *::after {
 }
 
 .droplet-content {
-  will-change: opacity, transform;
+  will-change: opacity, transform, filter;
   transform-origin: center center;
 }
 
@@ -714,24 +828,31 @@ html.theme-transitioning *::after {
   transform-origin: left center;
 }
 
-.clock-item-worked {
+.clock-item-punchin {
   opacity: var(--metric-1-op, 0);
-  transform: translateX(calc((1 - var(--metric-1-op, 0)) * -10px));
+  transform: translateX(calc((1 - var(--metric-1-op, 0)) * -8px)) scale(calc(0.93 + var(--metric-1-op, 0) * 0.07));
 }
 
-.clock-item-punches {
+.clock-item-left {
   opacity: var(--metric-2-op, 0);
-  transform: translateX(calc((1 - var(--metric-2-op, 0)) * -10px));
+  transform: translateX(calc((1 - var(--metric-2-op, 0)) * -8px)) scale(calc(0.93 + var(--metric-2-op, 0) * 0.07));
 }
 
-.clock-item-shift {
+.clock-item-worked {
   opacity: var(--metric-3-op, 0);
-  transform: translateX(calc((1 - var(--metric-3-op, 0)) * -10px));
+  transform: translateX(calc((1 - var(--metric-3-op, 0)) * -8px)) scale(calc(0.93 + var(--metric-3-op, 0) * 0.07));
 }
 
 .clock-item-leave {
   opacity: var(--metric-4-op, 0);
-  transform: translateX(calc((1 - var(--metric-4-op, 0)) * -10px));
+  transform: translateX(calc((1 - var(--metric-4-op, 0)) * -8px)) scale(calc(0.93 + var(--metric-4-op, 0) * 0.07));
+}
+
+@media (max-width: 400px) {
+  .clock-item-worked > span:last-child,
+  .clock-item-leave > span:first-of-type {
+    display: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -741,6 +862,7 @@ html.theme-transitioning *::after {
     transform: none !important;
     opacity: 1 !important;
     border-radius: 0.5rem !important;
+    filter: none !important;
   }
   .droplet-sheen {
     display: none !important;
@@ -751,6 +873,13 @@ html.theme-transitioning *::after {
   }
   .clock-expanded-section {
     display: none !important;
+  }
+  .metric-cell {
+    transform: none !important;
+    transition-duration: 0.01ms !important;
+  }
+  .table-dock-header {
+    transition-duration: 0.01ms !important;
   }
 }
 

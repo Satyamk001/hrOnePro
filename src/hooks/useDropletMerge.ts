@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback } from "react";
 
 interface DropletMergeOptions {
   mainRef: React.RefObject<HTMLElement | null>;
+  headerRef?: React.RefObject<HTMLElement | null>;
   clockPillRef: React.RefObject<HTMLElement | null>;
   placeholderRef: React.RefObject<HTMLDivElement | null>;
   morphingRef: React.RefObject<HTMLDivElement | null>;
@@ -24,6 +25,7 @@ interface Geometry {
 
 export function useDropletMerge({
   mainRef,
+  headerRef,
   clockPillRef,
   placeholderRef,
   morphingRef,
@@ -34,6 +36,8 @@ export function useDropletMerge({
   const geometryRef = useRef<Geometry | null>(null);
   const rafIdRef = useRef<number>(0);
   const isReducedMotionRef = useRef<boolean>(false);
+
+  const initialClockWidthRef = useRef<number>(0);
 
   const measure = useCallback(() => {
     if (!mainRef.current || !clockPillRef.current || !placeholderRef.current) {
@@ -48,6 +52,12 @@ export function useDropletMerge({
     const clockRect = clockEl.getBoundingClientRect();
     const placeholderRect = placeholderEl.getBoundingClientRect();
     const scrollTop = mainEl.scrollTop;
+
+    // Cache the compact clock width before expansion so scale calculations stay consistent
+    if (scrollTop < 10 || initialClockWidthRef.current === 0) {
+      initialClockWidthRef.current = clockRect.width;
+    }
+    const compactClockWidth = initialClockWidthRef.current || clockRect.width;
 
     // Clock center in viewport coordinates
     const clockCenterX = clockRect.left + clockRect.width / 2;
@@ -64,7 +74,7 @@ export function useDropletMerge({
     geometryRef.current = {
       clockCenterX,
       clockCenterY,
-      clockWidth: clockRect.width,
+      clockWidth: compactClockWidth,
       clockHeight: clockRect.height,
       cardCenterX,
       cardCenterY0,
@@ -80,6 +90,10 @@ export function useDropletMerge({
     const sheenEl = sheenRef.current;
     const clockPillEl = clockPillRef.current;
 
+    if (headerRef?.current) {
+      headerRef.current.setAttribute("data-scrolled", "false");
+    }
+
     if (morphingEl) {
       morphingEl.style.transform = "none";
       morphingEl.style.borderRadius = "";
@@ -90,6 +104,7 @@ export function useDropletMerge({
     if (contentEl) {
       contentEl.style.opacity = "1";
       contentEl.style.transform = "none";
+      contentEl.style.filter = "none";
     }
     if (sheenEl) {
       sheenEl.style.opacity = "0";
@@ -104,7 +119,7 @@ export function useDropletMerge({
       clockPillEl.style.setProperty("--metric-3-op", "0");
       clockPillEl.style.setProperty("--metric-4-op", "0");
     }
-  }, [morphingRef, contentRef, sheenRef, clockPillRef]);
+  }, [morphingRef, contentRef, sheenRef, clockPillRef, headerRef]);
 
   const updateAnimation = useCallback(() => {
     rafIdRef.current = 0;
@@ -129,6 +144,16 @@ export function useDropletMerge({
 
     const geo = geometryRef.current;
     const scrollTop = mainEl.scrollTop;
+
+    // Toggle topbar glass elevation based on scroll depth (> 10px)
+    if (headerRef?.current) {
+      const isScrolled = scrollTop > 10;
+      const currentScrolled = headerRef.current.getAttribute("data-scrolled") === "true";
+      if (currentScrolled !== isScrolled) {
+        headerRef.current.setAttribute("data-scrolled", isScrolled ? "true" : "false");
+      }
+    }
+
     const progress = Math.min(1, Math.max(0, scrollTop / geo.threshold));
 
     if (progress <= 0) {
@@ -147,107 +172,129 @@ export function useDropletMerge({
     const scaleYFinal = Math.max(0.1, geo.clockHeight / geo.cardHeight);
 
     // =========================================================================
-    // PHASE 1: 0.00 – 0.30 (Today Card Content Dissolves & Detaches)
+    // PHASE 1: 0.00 – 0.28 (Today Card Dissolves into Fluid Core)
+    // Blur-before-move & context fade per ui-animation craft standards
     // =========================================================================
-    const contentP = Math.min(1, progress / 0.28);
-    const contentOpacity = Math.max(0, 1 - contentP);
-    const contentScale = 1 - contentP * 0.15;
+    const contentP = Math.min(1, progress / 0.24);
+    const contentOpacity = Math.max(0, 1 - Math.pow(contentP, 1.4));
+    const contentScale = 1 - contentP * 0.12;
+    const contentBlur = (contentP * 2.5).toFixed(1);
 
     // =========================================================================
-    // PHASE 2: 0.00 – 0.70 (Droplet Shapes & Travels Toward Clock Pill)
+    // PHASE 2: 0.00 – 0.72 (Liquid Droplet Flight & Anisotropic Stretch)
+    // Sigmoidal power curve: decisive acceleration and gentle cushioning
     // =========================================================================
-    // Flight progress normalized to 0.00 -> 0.70
-    const flightProgress = Math.min(1, Math.max(0, progress / 0.70));
-    const moveP = flightProgress < 0.5
-      ? 4 * flightProgress * flightProgress * flightProgress
-      : 1 - Math.pow(-2 * flightProgress + 2, 3) / 2;
+    const flightProgress = Math.min(1, Math.max(0, progress / 0.72));
+    const moveP =
+      flightProgress <= 0
+        ? 0
+        : flightProgress >= 1
+        ? 1
+        : Math.pow(flightProgress, 1.5) /
+          (Math.pow(flightProgress, 1.5) + Math.pow(1 - flightProgress, 1.5));
 
     const translateX = deltaX * moveP;
     const translateY = deltaY * moveP;
 
-    // Horizontal scale: narrows progressively as it travels upward
-    const scaleX = 1 - (1 - scaleXFinal) * Math.pow(flightProgress, 1.15);
+    // Horizontal narrowing
+    const scaleX = 1 - (1 - scaleXFinal) * Math.pow(flightProgress, 1.25);
 
-    // Vertical scale: Liquid Stretch / Teardrop Elongation
+    // Vertical elongation: dynamic fluid stretch peaking mid-flight
     let scaleY: number;
-    if (flightProgress <= 0.45) {
-      const t = flightProgress / 0.45;
-      scaleY = 1.0 + 0.16 * Math.sin(t * (Math.PI / 2));
+    if (flightProgress <= 0.42) {
+      const t = flightProgress / 0.42;
+      scaleY = 1.0 + 0.22 * Math.sin(t * (Math.PI / 2));
     } else {
-      const t = (flightProgress - 0.45) / 0.55;
+      const t = (flightProgress - 0.42) / 0.58;
       const easeSnap = t * t * (3 - 2 * t);
-      scaleY = 1.16 - (1.16 - scaleYFinal) * easeSnap;
+      scaleY = 1.22 - (1.22 - scaleYFinal) * easeSnap;
     }
 
-    // Border radius: leading top edge domes faster into droplet apex
-    const topT = Math.min(1, Math.pow(flightProgress / 0.45, 2));
-    const bottomT = Math.min(1, Math.pow(flightProgress / 0.65, 2));
+    // Teardrop morphology: leading top edge domes into apex
+    const topT = Math.min(1, Math.pow(flightProgress / 0.38, 1.6));
+    const bottomT = Math.min(1, Math.pow(flightProgress / 0.58, 1.6));
     const topR = Math.round(8 + (9999 - 8) * topT);
     const bottomR = Math.round(8 + (9999 - 8) * bottomT);
     const borderRadius = `${topR}px ${topR}px ${bottomR}px ${bottomR}px`;
 
-    // Sheen is visible during flight
+    // Glass sheen: reflects light during flight, dissolves on absorption
     let sheenOpacity = 0;
-    if (progress < 0.70) {
-      sheenOpacity = Math.min(1, progress * 3.5);
-    } else if (progress < 0.82) {
-      sheenOpacity = Math.max(0, (0.82 - progress) / 0.12);
+    if (progress < 0.20) {
+      sheenOpacity = progress / 0.20;
+    } else if (progress < 0.66) {
+      sheenOpacity = 1;
+    } else if (progress < 0.78) {
+      sheenOpacity = Math.max(0, (0.78 - progress) / 0.12);
     }
 
     // =========================================================================
-    // PHASE 3: 0.70 – 0.82 (Absorption & Clock Pill Impact Compression)
+    // PHASE 3: 0.66 – 0.82 (Momentum Transfer: Impact Squash & Meniscus Glow)
+    // Continuous kinetic handoff — no dead zone before expansion
     // =========================================================================
     let dropletOpacity = 1;
-    if (progress < 0.70) {
+    if (progress < 0.66) {
       dropletOpacity = 1;
-    } else if (progress < 0.82) {
-      const absorb = (progress - 0.70) / 0.12;
+    } else if (progress < 0.78) {
+      const absorb = (progress - 0.66) / 0.12;
       dropletOpacity = Math.max(0, 1 - absorb);
     } else {
       dropletOpacity = 0;
     }
 
-    // Impact compression on clock pill
-    if (progress >= 0.70 && progress < 0.82) {
-      const u = (progress - 0.70) / 0.12;
-      const impactWave = Math.sin(u * Math.PI);
-      const pillScaleX = 1.0 + 0.05 * impactWave;
-      const pillScaleY = 1.0 - 0.04 * impactWave;
-      clockPillEl.style.transform = `scale(${pillScaleX.toFixed(4)}, ${pillScaleY.toFixed(4)})`;
+    let pillScaleX = 1.0;
+    let pillScaleY = 1.0;
+    let glowAlpha = 0;
+    let glowRadius = 0;
 
-      const glowAlpha = (0.38 * impactWave).toFixed(3);
-      const glowRadius = Math.round(18 * impactWave);
-      clockPillEl.style.boxShadow = `0 0 ${glowRadius}px rgba(217, 119, 6, ${glowAlpha}), 0 4px 16px rgba(0, 0, 0, 0.08)`;
+    if (progress >= 0.66 && progress < 0.82) {
+      const u = (progress - 0.66) / 0.16;
+      const impactWave = Math.sin(u * Math.PI);
+      pillScaleX = 1.0 + 0.05 * impactWave;
+      pillScaleY = 1.0 - 0.045 * impactWave;
+      glowAlpha = 0.36 * impactWave;
+      glowRadius = Math.round(18 * impactWave);
+    }
+
+    if (pillScaleX !== 1.0 || pillScaleY !== 1.0) {
+      clockPillEl.style.transform = `scale3d(${pillScaleX.toFixed(4)}, ${pillScaleY.toFixed(4)}, 1)`;
     } else {
       clockPillEl.style.transform = "none";
+    }
+
+    if (glowRadius > 0) {
+      clockPillEl.style.boxShadow = `0 0 ${glowRadius}px rgba(217, 119, 6, ${glowAlpha.toFixed(3)}), 0 4px 16px rgba(0, 0, 0, 0.08)`;
+    } else {
       clockPillEl.style.boxShadow = "";
     }
 
     // =========================================================================
-    // PHASE 4: 0.82 – 1.00 (Clock Pill Horizontally Expands & Reveals Today Metrics)
+    // PHASE 4: 0.72 – 1.00 (Elastic Pill Expansion & Wave Metric Unpacking)
+    // Expansion launches directly out of peak impact compression
     // =========================================================================
-    let expandP = 0;
     let compactOpacity = 1;
-
-    if (progress >= 0.82) {
-      const e = (progress - 0.82) / 0.18;
-      // Smooth cubic expansion
-      expandP = e * e * (3 - 2 * e);
+    if (progress >= 0.62 && progress < 0.74) {
+      compactOpacity = Math.max(0, 1 - (progress - 0.62) / 0.12);
+    } else if (progress >= 0.74) {
       compactOpacity = 0;
-    } else if (progress >= 0.70) {
-      const u = (progress - 0.70) / 0.12;
-      compactOpacity = Math.max(0, 1 - u * 1.5);
     }
 
-    // Staggered metric groups reveal:
-    // 1. Worked so far: 0.00 -> 0.35
-    // 2. Punches: 0.20 -> 0.55
-    // 3. Shift: 0.40 -> 0.75
-    // 4. Can leave at: 0.60 -> 0.95
-    const m1 = Math.min(1, Math.max(0, (expandP - 0.00) / 0.35));
-    const m2 = Math.min(1, Math.max(0, (expandP - 0.20) / 0.35));
-    const m3 = Math.min(1, Math.max(0, (expandP - 0.40) / 0.35));
-    const m4 = Math.min(1, Math.max(0, (expandP - 0.60) / 0.35));
+    let expandP = 0;
+    if (progress >= 0.72) {
+      const e = (progress - 0.72) / 0.28;
+      expandP = Math.min(1, Math.max(0, e * e * (3 - 2 * e)));
+    }
+
+    // Staggered wave unpacking with cubic ease-out
+    const easeOutCubic = (x: number) => 1 - Math.pow(1 - x, 3);
+    const r1 = Math.min(1, Math.max(0, (expandP - 0.00) / 0.38));
+    const r2 = Math.min(1, Math.max(0, (expandP - 0.18) / 0.38));
+    const r3 = Math.min(1, Math.max(0, (expandP - 0.36) / 0.38));
+    const r4 = Math.min(1, Math.max(0, (expandP - 0.54) / 0.38));
+
+    const m1 = easeOutCubic(r1);
+    const m2 = easeOutCubic(r2);
+    const m3 = easeOutCubic(r3);
+    const m4 = easeOutCubic(r4);
 
     clockPillEl.style.setProperty("--expand-p", expandP.toFixed(4));
     clockPillEl.style.setProperty("--compact-opacity", compactOpacity.toFixed(3));
@@ -259,19 +306,20 @@ export function useDropletMerge({
     // =========================================================================
     // Apply Styles to Morphing Droplet
     // =========================================================================
-    morphingEl.style.transform = `translate3d(${translateX.toFixed(2)}px, ${translateY.toFixed(2)}px, 0) scale(${scaleX.toFixed(4)}, ${scaleY.toFixed(4)})`;
+    morphingEl.style.transform = `translate3d(${translateX.toFixed(2)}px, ${translateY.toFixed(2)}px, 0) scale3d(${scaleX.toFixed(4)}, ${scaleY.toFixed(4)}, 1)`;
     morphingEl.style.borderRadius = borderRadius;
     morphingEl.style.opacity = dropletOpacity.toFixed(3);
     morphingEl.style.zIndex = "25";
-    morphingEl.style.pointerEvents = progress > 0.2 ? "none" : "auto";
+    morphingEl.style.pointerEvents = progress > 0.15 ? "none" : "auto";
 
     contentEl.style.opacity = contentOpacity.toFixed(3);
-    contentEl.style.transform = `scale(${contentScale.toFixed(4)})`;
+    contentEl.style.transform = `scale3d(${contentScale.toFixed(4)}, ${contentScale.toFixed(4)}, 1)`;
+    contentEl.style.filter = contentP > 0.04 ? `blur(${contentBlur}px)` : "none";
 
     if (sheenEl) {
       sheenEl.style.opacity = sheenOpacity.toFixed(3);
     }
-  }, [mainRef, morphingRef, contentRef, sheenRef, clockPillRef, measure, resetStyles]);
+  }, [mainRef, headerRef, morphingRef, contentRef, sheenRef, clockPillRef, measure, resetStyles]);
 
   const onScroll = useCallback(() => {
     if (rafIdRef.current) return;

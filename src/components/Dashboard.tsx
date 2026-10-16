@@ -74,14 +74,14 @@ export default function Dashboard({ metrics }: DashboardProps) {
       {metrics.workedDayCount >= 2 && (metrics.longestDay || metrics.shortestDay) && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {metrics.longestDay && (
-            <div className="rounded-lg border border-hairline bg-canvas p-5 shadow-subtle">
+            <div className="rounded-lg border border-hairline bg-canvas p-5 shadow-subtle metric-cell">
               <p className="text-[11px] text-steel uppercase tracking-wide mb-1">Longest Day</p>
               <p className="text-sm font-medium text-ink">{metrics.longestDay.date}</p>
               <p className="text-xs text-slate mt-0.5">{formatMinutes(metrics.longestDay.minutes)}</p>
             </div>
           )}
           {metrics.shortestDay && (
-            <div className="rounded-lg border border-hairline bg-canvas p-5 shadow-subtle">
+            <div className="rounded-lg border border-hairline bg-canvas p-5 shadow-subtle metric-cell">
               <p className="text-[11px] text-steel uppercase tracking-wide mb-1">Shortest Day</p>
               <p className="text-sm font-medium text-ink">{metrics.shortestDay.date}</p>
               <p className="text-xs text-slate mt-0.5">{formatMinutes(metrics.shortestDay.minutes)}</p>
@@ -95,7 +95,7 @@ export default function Dashboard({ metrics }: DashboardProps) {
 
 function Cell({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="rounded-lg border border-hairline bg-canvas p-4 shadow-subtle">
+    <div className="rounded-lg border border-hairline bg-canvas p-4 shadow-subtle metric-cell">
       <p className="text-[11px] text-steel uppercase tracking-wide mb-1">{label}</p>
       <p className="font-display text-2xl font-medium text-ink tracking-heading">{value}</p>
       {sub && <p className="text-[11px] text-stone mt-0.5">{sub}</p>}
