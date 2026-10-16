@@ -327,6 +327,9 @@ function App() {
     if (!entries.length) return null;
     return [...entries].sort((a, b) => b.key.localeCompare(a.key))[0].key;
   });
+  const sortedEntries = useMemo(() => {
+    return savedEntries.slice().sort((a, b) => b.key.localeCompare(a.key));
+  }, [savedEntries]);
   const [userName, setUserName] = useState(() => localStorage.getItem(USER_KEY) || "");
   const [showAllDays, setShowAllDays] = useState(false);
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains("dark"));
@@ -465,16 +468,29 @@ function App() {
     const container = scrollContainerRef.current;
     if (!container) return;
 
-    const updateVisuals = () => {
-      const containerRect = container.getBoundingClientRect();
-      const containerCenter = containerRect.top + containerRect.height / 2;
+    const isReduced = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (isReduced) {
+      itemsRef.current.forEach((item) => {
+        if (!item) return;
+        item.style.transform = "none";
+        item.style.opacity = "1";
+        item.style.zIndex = "1";
+      });
+      return;
+    }
 
-      // Update padding to allow centering first/last items
+    const updatePadding = () => {
+      const containerRect = container.getBoundingClientRect();
       const halfHeight = containerRect.height / 2;
-      if (container.style.paddingTop !== `${halfHeight}px`) {
+      if (halfHeight > 0) {
         container.style.paddingTop = `${halfHeight}px`;
         container.style.paddingBottom = `${halfHeight}px`;
       }
+    };
+
+    const updateVisuals = () => {
+      const containerRect = container.getBoundingClientRect();
+      const containerCenter = containerRect.top + containerRect.height / 2;
 
       itemsRef.current.forEach((item) => {
         if (!item) return;
@@ -482,46 +498,26 @@ function App() {
         const itemCenter = rect.top + rect.height / 2;
 
         const pixelDistance = Math.abs(itemCenter - containerCenter);
-        const itemHeight = item.offsetHeight;
+        const itemHeight = item.offsetHeight || 50;
         const itemSpacing = itemHeight + 8; // approx 8px gap
         if (itemSpacing === 0) return;
 
-        let positionDistance = pixelDistance / itemSpacing;
+        const positionDistance = pixelDistance / itemSpacing;
 
-        let scale = 1.10;
-        let opacity = 1.00;
-        let zIndex = 100;
+        // Smooth continuous Gaussian curve (eliminates piecewise robotic steps)
+        const falloff = Math.exp(-0.45 * positionDistance * positionDistance);
+        const scale = 0.82 + 0.24 * falloff;
+        const opacity = 0.15 + 0.85 * falloff;
+        const zIndex = Math.round(10 + 90 * falloff);
 
-        if (positionDistance < 1) {
-          scale = 1.10 - (1.10 - 0.95) * positionDistance;
-          opacity = 1.00 - (1.00 - 0.60) * positionDistance;
-          zIndex = 100;
-        } else if (positionDistance < 2) {
-          const p = positionDistance - 1;
-          scale = 0.95 - (0.95 - 0.85) * p;
-          opacity = 0.60 - (0.60 - 0.35) * p;
-          zIndex = 50;
-        } else if (positionDistance < 3) {
-          const p = positionDistance - 2;
-          scale = 0.85 - (0.85 - 0.80) * p;
-          opacity = 0.35 - (0.35 - 0.20) * p;
-          zIndex = 40;
-        } else if (positionDistance < 4) {
-          const p = positionDistance - 3;
-          scale = 0.80 - (0.80 - 0.75) * p;
-          opacity = 0.20 - (0.20 - 0.10) * p;
-          zIndex = 30;
-        } else {
-          scale = 0.75;
-          opacity = 0.10;
-          zIndex = 20;
-        }
-
-        item.style.transform = `scale(${scale})`;
-        item.style.opacity = opacity.toString();
+        item.style.transform = `scale3d(${scale.toFixed(4)}, ${scale.toFixed(4)}, 1)`;
+        item.style.opacity = opacity.toFixed(3);
         item.style.zIndex = zIndex.toString();
       });
     };
+
+    updatePadding();
+    updateVisuals();
 
     let ticking = false;
     const onScroll = () => {
@@ -534,17 +530,23 @@ function App() {
       }
     };
 
-    container.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onScroll);
-    updateVisuals();
-    setTimeout(updateVisuals, 50);
-    setTimeout(updateVisuals, 300);
+    const onResize = () => {
+      updatePadding();
+      updateVisuals();
+    };
+
+    container.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onResize);
+    const t1 = setTimeout(updateVisuals, 50);
+    const t2 = setTimeout(updateVisuals, 300);
 
     return () => {
-      container.removeEventListener('scroll', onScroll);
-      window.removeEventListener('resize', onScroll);
+      container.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onResize);
+      clearTimeout(t1);
+      clearTimeout(t2);
     };
-  }, [savedEntries, activeKey]);
+  }, [sortedEntries, activeKey]);
 
   useEffect(() => {
     if (activeItemRef.current) {
@@ -999,17 +1001,17 @@ function App() {
         {/* Sidebar — Cinematic episode selector */}
         <aside className="w-full xl:w-[22%] xl:max-w-[340px] lg:w-[25%] lg:max-w-[320px] md:w-[30%] md:max-w-[300px] shrink-0 flex flex-col overflow-hidden z-10 max-md:h-auto max-md:min-h-[100px] max-md:max-h-[60vh] md:h-full relative">
           {/* Scrollable list */}
-          <div className="flex-1 min-h-0 overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-hidden relative">
             {savedEntries.length === 0 ? (
               <p className="px-5 py-8 text-sm text-slate text-center">No data yet</p>
             ) : (
               <div
                 ref={scrollContainerRef}
-                className="w-full h-full overflow-y-auto overflow-x-hidden scrollbar-hidden relative max-md:max-h-[35vh]"
+                className="w-full h-full overflow-y-auto overflow-x-hidden scrollbar-hidden relative max-md:max-h-[35vh] sidebar-carousel-mask sidebar-scroll-container"
                 style={{ overscrollBehavior: 'contain' }}
               >
                 <div className="flex flex-col items-center w-full gap-[8px]">
-                  {savedEntries.slice().sort((a, b) => b.key.localeCompare(a.key)).map((entry, index) => {
+                  {sortedEntries.map((entry, index) => {
                     const isActive = activeKey === entry.key;
 
                     return (
@@ -1025,34 +1027,46 @@ function App() {
                         }}
                         aria-current={isActive ? "true" : undefined}
                         aria-label={`${entry.label}${isActive ? " (selected)" : ""}`}
-                        className="cursor-pointer block text-left rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
+                        className="sidebar-episode-btn cursor-pointer block text-left rounded-lg snap-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
                         style={{
                           width: '72%',
                           maxWidth: '230px',
                           transformOrigin: 'center center',
                           willChange: 'transform, opacity',
-                          transition: 'transform 300ms ease-out, opacity 300ms ease-out, border-color 300ms ease-out, background-color 300ms ease-out, box-shadow 300ms ease-out',
                         }}
                       >
-                        <div className={`relative rounded-lg overflow-hidden border transition-colors duration-300 w-full max-w-full ${isActive
-                            ? "border-primary shadow-lg shadow-primary/20"
-                            : "border-hairline hover:border-hairline-strong"
-                          }`}>
-                          <div className={`px-3 py-2 flex items-start gap-x-2.5 w-full min-w-0 ${isActive ? "bg-primary/20" : "bg-canvas/50"
-                            }`}>
+                        <div
+                          data-active={isActive ? "true" : "false"}
+                          className={`sidebar-card relative rounded-lg overflow-hidden border w-full max-w-full active:scale-[0.98] transition-[border-color,background-color,box-shadow,transform] duration-200 ease-out ${
+                            isActive
+                              ? "border-primary shadow-lg shadow-primary/20"
+                              : "border-hairline hover:border-hairline-strong hover:bg-surface/50"
+                          }`}
+                        >
+                          <div
+                            className={`px-3 py-2 flex items-start gap-x-2.5 w-full min-w-0 transition-colors duration-200 ${
+                              isActive ? "bg-primary/20" : "bg-canvas/50"
+                            }`}
+                          >
                             {/* Number badge */}
-                            <div className={`flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center font-bold text-[12px] mt-0.5 ${isActive
-                                ? "bg-primary text-white"
-                                : "bg-hairline-soft text-steel"
-                              }`}>
+                            <div
+                              className={`flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center font-bold text-[12px] mt-0.5 transition-colors duration-200 ${
+                                isActive
+                                  ? "bg-primary text-white"
+                                  : "bg-hairline-soft text-steel"
+                              }`}
+                            >
                               {index + 1}
                             </div>
                             {/* Title + date */}
                             <div className="flex-1 min-w-0 overflow-hidden text-left">
-                              <h4 className={`text-[12px] font-semibold leading-snug transition-all duration-300 ${isActive
-                                  ? "line-clamp-none whitespace-normal break-words text-ink"
-                                  : "line-clamp-1 truncate text-slate"
-                                }`}>
+                              <h4
+                                className={`text-[12px] font-semibold leading-snug transition-colors duration-200 ${
+                                  isActive
+                                    ? "line-clamp-none whitespace-normal break-words text-ink"
+                                    : "line-clamp-1 truncate text-slate"
+                                }`}
+                              >
                                 {entry.label}
                               </h4>
                               <p className="text-[10px] text-stone mt-0.5 truncate">
@@ -1060,12 +1074,6 @@ function App() {
                               </p>
                             </div>
                           </div>
-                          {/* Progress bar — only on active */}
-                          {/* {isActive && (
-                            <div className="h-[3px] w-full bg-hairline">
-                              <div className="h-full bg-primary" style={{ width: '100%' }} />
-                            </div>
-                          )} */}
                         </div>
                       </button>
                     );

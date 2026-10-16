@@ -709,6 +709,39 @@ html.theme-transitioning *::after {
     background-color 200ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* Sidebar Cinematic Wheel Carousel */
+.sidebar-carousel-mask {
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0px,
+    black 44px,
+    black calc(100% - 44px),
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0px,
+    black 44px,
+    black calc(100% - 44px),
+    transparent 100%
+  );
+}
+
+.sidebar-scroll-container {
+  scroll-snap-type: y proximity;
+}
+
+.sidebar-card {
+  will-change: transform, box-shadow;
+  touch-action: manipulation;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .sidebar-card:not([data-active="true"]):hover {
+    box-shadow: 0 4px 12px -2px rgba(28, 25, 23, 0.05);
+  }
+}
+
 .glow-card {
   box-shadow: 0 0 0 0 transparent;
   transition: box-shadow 300ms ease, transform 200ms ease;
@@ -880,6 +913,17 @@ html.theme-transitioning *::after {
   }
   .table-dock-header {
     transition-duration: 0.01ms !important;
+  }
+  .sidebar-carousel-mask {
+    mask-image: none !important;
+    -webkit-mask-image: none !important;
+  }
+  .sidebar-episode-btn {
+    transform: none !important;
+    opacity: 1 !important;
+  }
+  .sidebar-card {
+    transform: none !important;
   }
 }
 
