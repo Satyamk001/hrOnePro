@@ -60,13 +60,13 @@ describe("classifyRecord", () => {
       expect(result.status).toBe("Half Day");
     });
 
-    it('5. Both halves "FL" → "Full Leave"', () => {
+    it('5. Both halves "FL" → "Flexi Leave"', () => {
       const record = buildRecord({
         updatedFirstHalfStatus: "FL",
         updatedSecondHalfStatus: "FL",
       });
       const result = classifyRecord(record);
-      expect(result.status).toBe("Full Leave");
+      expect(result.status).toBe("Flexi Leave");
     });
 
     it('6. Both halves "EL" → "Earned Leave"', () => {
@@ -78,15 +78,52 @@ describe("classifyRecord", () => {
       expect(result.status).toBe("Earned Leave");
     });
 
-    it('7. timeIn=null, timeout=null, halves not WO → "Missing"', () => {
+    it('7. timeIn=null, timeout=null, unclassified halves → "Missing"', () => {
       const record = buildRecord({
         timeIn: null,
         timeout: null,
+        updatedFirstHalfStatus: "P",
+        updatedSecondHalfStatus: "WO",
+      });
+      const result = classifyRecord(record);
+      expect(result.status).toBe("Missing");
+    });
+
+    it('9. Both halves "HO" → "Holiday"', () => {
+      const record = buildRecord({
+        updatedFirstHalfStatus: "HO",
+        updatedSecondHalfStatus: "HO",
+      });
+      const result = classifyRecord(record);
+      expect(result.status).toBe("Holiday");
+    });
+
+    it('10. Both halves "-" → "Pending"', () => {
+      const record = buildRecord({
+        updatedFirstHalfStatus: "-",
+        updatedSecondHalfStatus: "-",
+      });
+      const result = classifyRecord(record);
+      expect(result.status).toBe("Pending");
+    });
+
+    it('11. Either half "A" → "Absent"', () => {
+      const record = buildRecord({
         updatedFirstHalfStatus: "A",
         updatedSecondHalfStatus: "A",
       });
       const result = classifyRecord(record);
-      expect(result.status).toBe("Missing");
+      expect(result.status).toBe("Absent");
+    });
+
+    it('12. Half-day combination wins over isLeave=1', () => {
+      const record = buildRecord({
+        isLeave: 1,
+        updatedFirstHalfStatus: "P",
+        updatedSecondHalfStatus: "FL",
+      });
+      const result = classifyRecord(record);
+      expect(result.status).toBe("Half Day");
     });
 
     it('8. Unknown codes → "Other" with otherDetail', () => {

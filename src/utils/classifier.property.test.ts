@@ -8,18 +8,21 @@ import type { AttendanceRecord } from '../types';
  * Validates: Requirements 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9
  *
  * Classification precedence (first match wins):
- * 1. isLeave === 1 → "Leave"
- * 2. Both halves "WO" → "Week Off"
- * 3. Both halves "P" → "Present"
- * 4. One half "P", other in {"FL","EL","HD"} → "Half Day"
- * 5. Either half "FL", neither "P" → "Full Leave"
- * 6. Either half "EL", neither "P" → "Earned Leave"
- * 7. timeIn === null && timeout === null → "Missing"
- * 8. Otherwise → "Other"
+ * 1. One half "P", other in {"FL","EL","HD"} → "Half Day"
+ * 2. isLeave === 1 → "Leave"
+ * 3. Both halves "HO" → "Holiday"
+ * 4. Both halves "WO" → "Week Off"
+ * 5. Both halves "P" → "Present"
+ * 6. Either half "FL", neither "P" → "Flexi Leave"
+ * 7. Either half "EL", neither "P" → "Earned Leave"
+ * 8. Both halves "-" → "Pending"
+ * 9. Either half "A" → "Absent"
+ * 10. timeIn === null && timeout === null → "Missing"
+ * 11. Otherwise → "Other"
  */
 
 /** Valid half-status codes used in attendance records */
-const halfStatusCodes = ['P', 'WO', 'FL', 'EL', 'HD', 'A'] as const;
+const halfStatusCodes = ['P', 'WO', 'HO', 'FL', 'EL', 'HD', 'A', '-'] as const;
 
 /** Generate a valid HH:MM time string */
 const arbTimeHHMM = fc
@@ -58,22 +61,15 @@ const arbAttendanceRecord: fc.Arbitrary<AttendanceRecord> = fc.record({
 /**
  * Reference implementation of classification precedence logic.
  * Used to independently compute the expected status for comparison.
+ * Must mirror src/utils/classifier.ts exactly.
  */
 function expectedStatus(record: AttendanceRecord): string {
   const firstHalf = record.updatedFirstHalfStatus;
   const secondHalf = record.updatedSecondHalfStatus;
   const halfDayCodes = new Set(['FL', 'EL', 'HD']);
 
-  // 1. isLeave === 1 → "Leave"
-  if (record.isLeave === 1) return 'Leave';
-
-  // 2. Both halves "WO" → "Week Off"
-  if (firstHalf === 'WO' && secondHalf === 'WO') return 'Week Off';
-
-  // 3. Both halves "P" → "Present"
-  if (firstHalf === 'P' && secondHalf === 'P') return 'Present';
-
-  // 4. One half "P", other in {"FL","EL","HD"} → "Half Day"
+  // 1. One half "P", other in {"FL","EL","HD"} → "Half Day"
+  //    (takes priority over isLeave, which can be set on half-days too)
   if (
     (firstHalf === 'P' && halfDayCodes.has(secondHalf)) ||
     (secondHalf === 'P' && halfDayCodes.has(firstHalf))
@@ -81,16 +77,28 @@ function expectedStatus(record: AttendanceRecord): string {
     return 'Half Day';
   }
 
-  // 5. Either half "FL", neither "P" → "Full Leave"
+  // 2. isLeave === 1 → "Leave"
+  if (record.isLeave === 1) return 'Leave';
+
+  // 3. Both halves "HO" → "Holiday"
+  if (firstHalf === 'HO' && secondHalf === 'HO') return 'Holiday';
+
+  // 4. Both halves "WO" → "Week Off"
+  if (firstHalf === 'WO' && secondHalf === 'WO') return 'Week Off';
+
+  // 5. Both halves "P" → "Present"
+  if (firstHalf === 'P' && secondHalf === 'P') return 'Present';
+
+  // 6. Either half "FL", neither "P" → "Flexi Leave"
   if (
     (firstHalf === 'FL' || secondHalf === 'FL') &&
     firstHalf !== 'P' &&
     secondHalf !== 'P'
   ) {
-    return 'Full Leave';
+    return 'Flexi Leave';
   }
 
-  // 6. Either half "EL", neither "P" → "Earned Leave"
+  // 7. Either half "EL", neither "P" → "Earned Leave"
   if (
     (firstHalf === 'EL' || secondHalf === 'EL') &&
     firstHalf !== 'P' &&
@@ -99,10 +107,16 @@ function expectedStatus(record: AttendanceRecord): string {
     return 'Earned Leave';
   }
 
-  // 7. timeIn === null && timeout === null → "Missing"
+  // 8. Both halves "-" → "Pending"
+  if (firstHalf === '-' && secondHalf === '-') return 'Pending';
+
+  // 9. Either half "A" → "Absent"
+  if (firstHalf === 'A' || secondHalf === 'A') return 'Absent';
+
+  // 10. timeIn === null && timeout === null → "Missing"
   if (record.timeIn === null && record.timeout === null) return 'Missing';
 
-  // 8. Otherwise → "Other"
+  // 11. Otherwise → "Other"
   return 'Other';
 }
 
@@ -118,13 +132,19 @@ describe('Property 7: Classification precedence correctness', () => {
     );
   });
 
-  it('isLeave=1 always produces "Leave" regardless of half-statuses', () => {
+  it('isLeave=1 produces "Leave" except for half-day combinations (which take precedence)', () => {
     fc.assert(
       fc.property(
         arbAttendanceRecord.map((r) => ({ ...r, isLeave: 1 as const })),
         (record) => {
           const result = classifyRecord(record);
-          expect(result.status).toBe('Leave');
+          const halfDayCodes = new Set(['FL', 'EL', 'HD']);
+          const firstHalf = record.updatedFirstHalfStatus;
+          const secondHalf = record.updatedSecondHalfStatus;
+          const isHalfDayCombo =
+            (firstHalf === 'P' && halfDayCodes.has(secondHalf)) ||
+            (secondHalf === 'P' && halfDayCodes.has(firstHalf));
+          expect(result.status).toBe(isHalfDayCombo ? 'Half Day' : 'Leave');
         }
       ),
       { numRuns: 100 }
@@ -192,7 +212,7 @@ describe('Property 7: Classification precedence correctness', () => {
     );
   });
 
-  it('"Full Leave" when either half is "FL" and neither is "P", with isLeave=0', () => {
+  it('"Flexi Leave" when either half is "FL" and neither is "P", with isLeave=0', () => {
     fc.assert(
       fc.property(
         fc.tuple(
@@ -207,8 +227,8 @@ describe('Property 7: Classification precedence correctness', () => {
         })),
         (record) => {
           const result = classifyRecord(record);
-          // "FL" in either half with neither being "P" → "Full Leave"
-          expect(result.status).toBe('Full Leave');
+          // "FL" in either half with neither being "P" → "Flexi Leave"
+          expect(result.status).toBe('Flexi Leave');
         }
       ),
       { numRuns: 100 }

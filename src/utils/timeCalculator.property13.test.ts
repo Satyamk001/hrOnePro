@@ -7,9 +7,10 @@ import type { ClassifiedRecord } from '../types';
 /**
  * Validates: Requirements 3.9
  *
- * Property 13: Average work duration correctness
+ * Property 13: Average work duration correctness (shift-weighted)
  * For any non-empty set of Worked_Days, the average work duration SHALL equal
- * floor(total working minutes / count of Worked_Days).
+ * floor(total working minutes / effective day count), where a Half Day counts
+ * as 0.5 of a day and days with zero worked minutes are excluded.
  */
 
 /** Generate a valid HH:MM time string */
@@ -95,7 +96,7 @@ const arbNonWorkedDayRecord = fc
     arbShiftPair,
     arbTimeHHMM,
     arbDate,
-    fc.constantFrom('Week Off', 'Leave', 'Full Leave', 'Earned Leave', 'Missing', 'Other') as fc.Arbitrary<'Week Off' | 'Leave' | 'Full Leave' | 'Earned Leave' | 'Missing' | 'Other'>
+    fc.constantFrom('Week Off', 'Leave', 'Flexi Leave', 'Earned Leave', 'Missing', 'Other') as fc.Arbitrary<'Week Off' | 'Leave' | 'Flexi Leave' | 'Earned Leave' | 'Missing' | 'Other'>
   )
   .map(([shift, calcHours, date, status]): ClassifiedRecord => ({
     employeeId: 1,
@@ -130,7 +131,7 @@ const arbRecordsWithAtLeastOneWorkedDay = fc
   .map(([worked, nonWorked]) => [...worked, ...nonWorked]);
 
 describe('Property 13: Average work duration correctness', () => {
-  it('averageWorkMinutes equals floor(totalWorkingMinutes / daysWithNonZeroHours)', () => {
+  it('averageWorkMinutes equals shift-weighted floor(totalWorkingMinutes / effectiveDayCount)', () => {
     fc.assert(
       fc.property(arbRecordsWithAtLeastOneWorkedDay, (records) => {
         const result = computeAggregateMetrics(records);
@@ -150,9 +151,13 @@ describe('Property 13: Average work duration correctness', () => {
         const enriched = workedDays.map(computeRecordMetrics);
         const daysWithHours = enriched.filter((d) => d.workedMinutes > 0);
 
-        // Expected average: divide by days that have hours, or 0 if none
-        const expectedAverage = daysWithHours.length > 0
-          ? Math.floor(totalWorkingMinutes / daysWithHours.length)
+        // Expected average: shift-weighted — Half Days count as 0.5 of a day
+        const effectiveDayCount = daysWithHours.reduce(
+          (sum, d) => sum + (d.status === 'Half Day' ? 0.5 : 1),
+          0
+        );
+        const expectedAverage = effectiveDayCount > 0
+          ? Math.floor(totalWorkingMinutes / effectiveDayCount)
           : 0;
 
         expect(result.averageWorkMinutes).toBe(expectedAverage);

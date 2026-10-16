@@ -1,115 +1,150 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { describe, it, expect } from "vitest";
+import { render, screen, act, fireEvent } from "@testing-library/react";
+import { describe, it, expect, beforeEach } from "vitest";
 import App from "../App";
+import type { AttendanceRecord, RawPunch } from "../types";
 
-const VALID_SINGLE_RECORD = JSON.stringify([
-  {
+/**
+ * Integration tests for the real ingestion flows:
+ * - Chrome extension path: window CustomEvents dispatched by receiver.js
+ * - Bookmarklet path: postMessage from the HROne tab
+ * - Undo safeguard when a re-sync returns fewer records
+ * - Intraday punch updates for the Today card
+ */
+
+function attendanceRecord(overrides: Partial<AttendanceRecord> = {}): AttendanceRecord {
+  return {
     employeeId: 1,
-    shiftId: 1,
-    timeIn: "09:00",
-    timeout: "18:00",
+    shiftId: 100,
+    timeIn: "09:30",
+    timeout: "18:30",
     presentStatus: "Present",
     calculatedWorkingHours: "09:00",
     isLeave: 0,
-    shiftStartTime: "09:00",
-    shiftEndTime: "18:00",
-    shiftCode: "GS",
+    shiftStartTime: "09:30",
+    shiftEndTime: "18:30",
+    shiftCode: "GEN",
     attendanceDate: "2024-01-15",
     updatedFirstHalfStatus: "P",
     updatedSecondHalfStatus: "P",
-  },
-]);
+    ...overrides,
+  };
+}
 
-describe("Integration: Full Data Flow", () => {
-  it("displays empty state with prompt and example JSON when no data is loaded", () => {
+function dispatchAttendanceFromExtension(records: AttendanceRecord[]) {
+  window.dispatchEvent(
+    new CustomEvent("AttendanceDataFromExtension", { detail: { records } })
+  );
+}
+
+function dispatchAttendanceFromBookmarklet(data: Record<string, unknown>) {
+  window.dispatchEvent(
+    new MessageEvent("message", { origin: window.location.origin, data })
+  );
+}
+
+beforeEach(() => {
+  localStorage.clear();
+});
+
+describe("Integration: empty state", () => {
+  it("shows the onboarding panel when no data has been synced", () => {
     render(<App />);
 
-    expect(
-      screen.getByText("Paste your attendance JSON data to see insights")
-    ).toBeInTheDocument();
-
-    // Verify the example JSON code block is present
-    expect(screen.getByText(/employeeId/)).toBeInTheDocument();
+    expect(screen.getByText("Know your hours in seconds")).toBeInTheDocument();
+    expect(screen.getByText("Get started in 30 seconds")).toBeInTheDocument();
   });
+});
 
-  it("displays inline error when invalid JSON is pasted and Analyze is clicked", () => {
+describe("Integration: extension ingestion path", () => {
+  it("renders the dashboard after AttendanceDataFromExtension arrives", () => {
     render(<App />);
 
-    const textarea = screen.getByPlaceholderText(
-      "Paste your attendance JSON data here..."
-    );
-    const button = screen.getByText("Analyze");
-
-    fireEvent.change(textarea, { target: { value: "not valid json {{{" } });
-    fireEvent.click(button);
-
-    expect(screen.getByText(/Invalid JSON:/)).toBeInTheDocument();
-  });
-
-  it("displays inline error when empty input is submitted", () => {
-    render(<App />);
-
-    const button = screen.getByText("Analyze");
-    fireEvent.click(button);
-
-    expect(
-      screen.getByText(
-        "No input provided. Please paste your attendance JSON data."
-      )
-    ).toBeInTheDocument();
-  });
-
-  it("renders Dashboard with expected metrics after valid JSON is parsed", async () => {
-    render(<App />);
-
-    const textarea = screen.getByPlaceholderText(
-      "Paste your attendance JSON data here..."
-    );
-    const button = screen.getByText("Analyze");
-
-    fireEvent.change(textarea, { target: { value: VALID_SINGLE_RECORD } });
-    fireEvent.click(button);
-
-    // Dashboard should now be visible with metrics
-    await waitFor(() => {
-      expect(screen.getByText("Total Days")).toBeInTheDocument();
+    act(() => {
+      dispatchAttendanceFromExtension([attendanceRecord()]);
     });
 
-    // Verify key metric card titles and values for a single Present day with 9h worked
-    expect(screen.getByText("Total Working Hours")).toBeInTheDocument();
-    expect(screen.getAllByText("9h 0m").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText("Overtime")).toBeInTheDocument();
-    expect(screen.getByText("Shortfall")).toBeInTheDocument();
-    expect(screen.getByText("Average Hours")).toBeInTheDocument();
-    expect(screen.getByText("Late Arrivals")).toBeInTheDocument();
-    expect(screen.getByText("0 (0.0%)")).toBeInTheDocument();
+    // Dashboard hero + metric grid
+    expect(screen.getByText("Net Balance")).toBeInTheDocument();
+    expect(screen.getAllByText("Worked Days").length).toBeGreaterThanOrEqual(1);
+
+    // Month label from deriveMonthKey, and the onboarding panel is gone
+    expect(screen.getAllByText("January 2024").length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText("Know your hours in seconds")).not.toBeInTheDocument();
+
+    // Confirmation toast
+    expect(screen.getByText(/Synced January 2024/)).toBeInTheDocument();
   });
 
-  it("renders all components (Dashboard, Charts, DayTable) with single-day data", async () => {
+  it("offers Undo when a re-sync returns fewer records, and restores the previous data", () => {
     render(<App />);
 
-    const textarea = screen.getByPlaceholderText(
-      "Paste your attendance JSON data here..."
-    );
-    const button = screen.getByText("Analyze");
+    const twoDays = [
+      attendanceRecord({ attendanceDate: "2024-01-15" }),
+      attendanceRecord({ attendanceDate: "2024-01-16" }),
+    ];
+    act(() => {
+      dispatchAttendanceFromExtension(twoDays);
+    });
+    expect(screen.getByText("Net Balance")).toBeInTheDocument();
 
-    fireEvent.change(textarea, { target: { value: VALID_SINGLE_RECORD } });
-    fireEvent.click(button);
-
-    // Verify Dashboard section
-    await waitFor(() => {
-      expect(screen.getByText("Total Days")).toBeInTheDocument();
+    // Re-sync with a shrunken payload (1 day instead of 2)
+    act(() => {
+      dispatchAttendanceFromExtension([attendanceRecord({ attendanceDate: "2024-01-15" })]);
     });
 
-    // Verify DayTable section header
-    expect(screen.getByText("Day-by-Day Details")).toBeInTheDocument();
+    expect(screen.getByText("Fewer days than before.")).toBeInTheDocument();
 
-    // Verify table has a row with the date from the record
-    expect(screen.getByText("2024-01-15")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
 
-    // Verify the empty state prompt is no longer visible
-    expect(
-      screen.queryByText("Paste your attendance JSON data to see insights")
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Fewer days than before.")).not.toBeInTheDocument();
+    expect(screen.getByText("Restored previous January 2024 data")).toBeInTheDocument();
+  });
+
+  it("updates the Today card when TodayPunchesFromExtension arrives", () => {
+    render(<App />);
+
+    act(() => {
+      dispatchAttendanceFromExtension([attendanceRecord()]);
+    });
+
+    const now = new Date();
+    const ymd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const punches: RawPunch[] = [
+      {
+        employeeId: 1,
+        punchDateTime: `${ymd}T09:30:00`,
+        punchSource: "Biometric.",
+        punchSourceCode: "BIO",
+        isPunchExcluded: false,
+      },
+    ];
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent("TodayPunchesFromExtension", { detail: { punches } })
+      );
+    });
+
+    expect(screen.getByText("Punched in")).toBeInTheDocument();
+    expect(screen.getByText("First Punch")).toBeInTheDocument();
+  });
+});
+
+describe("Integration: bookmarklet ingestion path", () => {
+  it("renders the dashboard from an ATTENDANCE_DATA postMessage", () => {
+    render(<App />);
+
+    act(() => {
+      dispatchAttendanceFromBookmarklet({
+        type: "ATTENDANCE_DATA",
+        records: [attendanceRecord()],
+        userName: "Test User",
+        v: "6",
+      });
+    });
+
+    expect(screen.getByText("Net Balance")).toBeInTheDocument();
+    // Employee name lands in the brand pill
+    expect(screen.getByText(/Test User/)).toBeInTheDocument();
   });
 });
