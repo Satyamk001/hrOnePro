@@ -1,0 +1,171 @@
+/* ==========================================================================
+   Droplet Merge Animation — Liquid Morphing Today Card to Clock Pill
+   ========================================================================== */
+
+.droplet-morph-card {
+  position: relative;
+  transform-origin: center center;
+  will-change: transform, opacity, border-radius;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  transform: translateZ(0);
+}
+
+.droplet-sheen {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.6) 0%,
+    rgba(255, 255, 255, 0.15) 35%,
+    rgba(217, 119, 6, 0.08) 100%
+  );
+  backdrop-filter: blur(14px) saturate(1.25);
+  -webkit-backdrop-filter: blur(14px) saturate(1.25);
+  box-shadow:
+    inset 0 1.5px 2px rgba(255, 255, 255, 0.9),
+    inset 0 -1px 2px rgba(0, 0, 0, 0.04),
+    0 8px 24px rgba(28, 25, 23, 0.07);
+}
+
+.dark .droplet-sheen {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.14) 0%,
+    rgba(255, 255, 255, 0.04) 40%,
+    rgba(245, 158, 11, 0.08) 100%
+  );
+  box-shadow:
+    inset 0 1.5px 1px rgba(255, 255, 255, 0.2),
+    inset 0 -1px 2px rgba(0, 0, 0, 0.35),
+    0 12px 36px rgba(0, 0, 0, 0.35);
+}
+
+.droplet-content {
+  will-change: opacity, transform, filter;
+  transform-origin: center center;
+}
+
+.clock-pill {
+  will-change: transform, box-shadow;
+  transform-origin: center center;
+}
+
+/* Clock Pill Expansion & Progressive Disclosure */
+.clock-compact-section {
+  display: inline-flex;
+  align-items: center;
+  max-width: calc((1 - var(--expand-p, 0)) * 180px);
+  opacity: var(--compact-opacity, 1);
+  overflow: hidden;
+  white-space: nowrap;
+  will-change: max-width, opacity;
+}
+
+.clock-expanded-section {
+  display: inline-flex;
+  align-items: center;
+  max-width: calc(var(--expand-p, 0) * 600px);
+  opacity: var(--expand-p, 0);
+  overflow: hidden;
+  white-space: nowrap;
+  will-change: max-width, opacity;
+  padding-right: 2px;
+}
+
+/* Dedicated optical dividers with calibrated margins */
+.clock-pill-divider {
+  display: inline-block;
+  width: 1px;
+  height: 13px;
+  margin-inline: 11px;
+  background: color-mix(in srgb, var(--color-hairline) 85%, transparent);
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+@media (max-width: 640px) {
+  .clock-pill-divider {
+    margin-inline: 7px;
+  }
+}
+
+.clock-expanded-item {
+  display: inline-flex;
+  align-items: center;
+  will-change: transform, opacity;
+  transform-origin: left center;
+}
+
+.clock-item-punchin {
+  opacity: var(--metric-1-op, 0);
+  transform: translateX(calc((1 - var(--metric-1-op, 0)) * -8px)) scale(calc(0.93 + var(--metric-1-op, 0) * 0.07));
+}
+
+.clock-item-left {
+  opacity: var(--metric-2-op, 0);
+  transform: translateX(calc((1 - var(--metric-2-op, 0)) * -8px)) scale(calc(0.93 + var(--metric-2-op, 0) * 0.07));
+}
+
+.clock-item-worked {
+  opacity: var(--metric-3-op, 0);
+  transform: translateX(calc((1 - var(--metric-3-op, 0)) * -8px)) scale(calc(0.93 + var(--metric-3-op, 0) * 0.07));
+}
+
+.clock-item-leave {
+  opacity: var(--metric-4-op, 0);
+  transform: translateX(calc((1 - var(--metric-4-op, 0)) * -8px)) scale(calc(0.93 + var(--metric-4-op, 0) * 0.07));
+}
+
+@media (max-width: 400px) {
+  .clock-item-worked > span:last-child,
+  .clock-item-leave > span:first-of-type {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .droplet-morph-card,
+  .droplet-content,
+  .clock-pill {
+    transform: none !important;
+    opacity: 1 !important;
+    border-radius: 0.5rem !important;
+    filter: none !important;
+  }
+  .droplet-sheen {
+    display: none !important;
+  }
+  .clock-compact-section {
+    max-width: none !important;
+    opacity: 1 !important;
+  }
+  .clock-expanded-section {
+    display: none !important;
+  }
+  .metric-cell {
+    transform: none !important;
+    transition-duration: 0.01ms !important;
+  }
+  .table-dock-header {
+    transition-duration: 0.01ms !important;
+  }
+  .sidebar-carousel-mask {
+    mask-image: none !important;
+    -webkit-mask-image: none !important;
+  }
+  .sidebar-episode-btn {
+    transform: none !important;
+    opacity: 1 !important;
+  }
+  .sidebar-card {
+    transform: none !important;
+  }
+  .ambient-glow-top,
+  .ambient-glow-bottom-right {
+    filter: none !important;
+    opacity: 0.5 !important;
+  }
+}

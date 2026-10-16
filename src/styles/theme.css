@@ -1,0 +1,86 @@
+:root {
+  /* Brand & Accent */
+  --color-primary: #f97316;
+  --color-primary-deep: #ea580c;
+  --color-sunshine-300: #fcd34d;
+  --color-sunshine-500: #f59e0b;
+  --color-sunshine-700: #d97706;
+  --color-sunshine-800: #b45309;
+  --color-sunshine-900: #92400e;
+  --color-yellow-saturated: #fbbf24;
+
+  /* Cream / Neutral Warm */
+  --color-cream: #fef9ec;
+  --color-cream-soft: #fffdf7;
+  --color-cream-deeper: #fde68a;
+  --color-beige-deep: #e5d5b0;
+
+  /* Surface */
+  --color-canvas: #ffffff;
+  --color-surface: #fafaf9;
+  --color-surface-cream: #fefcf3;
+  --color-surface-code: #1e1e2e;
+  --color-hairline: #e7e5e4;
+  --color-hairline-soft: #f5f5f4;
+  --color-hairline-strong: #d6d3d1;
+
+  /* Text */
+  --color-ink: #1c1917;
+  --color-ink-tint: #292524;
+  --color-charcoal: #44403c;
+  --color-slate: #57534e;
+  /* steel/stone darkened to meet WCAG AA (4.5:1) on canvas and cream */
+  --color-steel: #6b6560;
+  --color-stone: #78716c;
+  --color-muted: #d6d3d1;
+  --color-on-dark: #fafaf9;
+  --color-on-dark-muted: rgba(250, 250, 249, 0.6);
+
+  /* Semantic */
+  --color-link: #f97316;
+  --color-error: #dc2626;
+  --color-warning: #d97706;
+  --color-success: #16a34a;
+}
+
+.dark {
+  /* Brand stays consistent */
+  --color-primary: #fb923c;
+  --color-primary-deep: #f97316;
+  --color-sunshine-300: #fcd34d;
+  --color-sunshine-500: #f59e0b;
+  --color-sunshine-700: #d97706;
+
+  /* Cream adapts to warm dark */
+  --color-cream: #292218;
+  --color-cream-soft: #1f1a14;
+  --color-cream-deeper: #44380e;
+  --color-beige-deep: #4a3f2a;
+
+  /* Surface — warm dark */
+  --color-canvas: #0f0e0c;
+  --color-surface: #171614;
+  --color-surface-cream: #1a1812;
+  --color-surface-code: #0f0e0c;
+  --color-hairline: #2e2a26;
+  --color-hairline-soft: #1f1c18;
+  --color-hairline-strong: #3d3730;
+
+  /* Text — warm whites */
+  --color-ink: #fafaf9;
+  --color-ink-tint: #e7e5e4;
+  --color-charcoal: #d6d3d1;
+  --color-slate: #a8a29e;
+  /* lightened to meet WCAG AA (4.5:1) on the warm dark canvas */
+  --color-steel: #9c958f;
+  --color-stone: #8a837d;
+  --color-muted: #44403c;
+  --color-on-dark: #fafaf9;
+  --color-on-dark-muted: rgba(250, 250, 249, 0.5);
+
+  /* Semantic */
+  --color-link: #fb923c;
+  --color-error: #f87171;
+  --color-warning: #fbbf24;
+  --color-success: #4ade80;
+}

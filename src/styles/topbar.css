@@ -1,0 +1,413 @@
+/* Glassmorphism Pill — shared topbar pill styling */
+.glass-pill {
+  background: color-mix(
+    in srgb,
+    white 78%,
+    transparent
+  );
+
+  backdrop-filter: blur(18px) saturate(1.25);
+  -webkit-backdrop-filter: blur(18px) saturate(1.25);
+
+  border: 1px solid color-mix(
+    in srgb,
+    var(--color-hairline) 70%,
+    transparent
+  );
+
+  border-radius: 9999px;
+  min-width: 0;
+
+  box-shadow:
+    0 2px 8px rgba(28, 25, 23, 0.035),
+    0 8px 24px rgba(28, 25, 23, 0.025),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+
+  transition:
+    background-color 200ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-color 200ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.glass-pill:hover {
+  border-color: color-mix(
+    in srgb,
+    var(--color-hairline-strong) 70%,
+    transparent
+  );
+
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.05),
+    0 10px 28px rgba(0, 0, 0, 0.03);
+}
+
+.dark .glass-pill {
+  background: color-mix(
+    in srgb,
+    var(--color-surface) 72%,
+    transparent
+  );
+
+  border-color: color-mix(
+    in srgb,
+    var(--color-hairline) 55%,
+    transparent
+  );
+
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.dark .glass-pill:hover {
+  border-color: color-mix(
+    in srgb,
+    var(--color-hairline-strong) 70%,
+    transparent
+  );
+
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* Elevated Glass Pills on Scroll */
+.topbar[data-scrolled="true"] .glass-pill {
+  background: color-mix(
+    in srgb,
+    white 88%,
+    transparent
+  );
+  border-color: color-mix(
+    in srgb,
+    var(--color-hairline) 90%,
+    transparent
+  );
+  box-shadow:
+    0 4px 16px rgba(28, 25, 23, 0.07),
+    0 12px 32px -4px rgba(28, 25, 23, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.topbar[data-scrolled="true"] .glass-pill:hover {
+  border-color: color-mix(
+    in srgb,
+    var(--color-hairline-strong) 85%,
+    transparent
+  );
+  box-shadow:
+    0 6px 20px rgba(28, 25, 23, 0.09),
+    0 16px 36px -4px rgba(28, 25, 23, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+.dark .topbar[data-scrolled="true"] .glass-pill {
+  background: color-mix(
+    in srgb,
+    var(--color-surface) 84%,
+    transparent
+  );
+  border-color: color-mix(
+    in srgb,
+    var(--color-hairline-strong) 65%,
+    transparent
+  );
+  box-shadow:
+    0 6px 20px rgba(0, 0, 0, 0.36),
+    0 14px 36px -4px rgba(0, 0, 0, 0.30),
+    inset 0 1px 0 rgba(255, 255, 255, 0.10);
+}
+
+.dark .topbar[data-scrolled="true"] .glass-pill:hover {
+  border-color: color-mix(
+    in srgb,
+    var(--color-hairline-strong) 85%,
+    transparent
+  );
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.40),
+    0 18px 40px -4px rgba(0, 0, 0, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+/* Keep the three existing pills balanced without changing their markup. */
+.topbar-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  padding: 12px 16px;
+  gap: clamp(10px, 2.2vw, 30px);
+  max-width: 100%;
+  overflow-x: clip;
+  overflow-y: visible;
+}
+
+.brand-pill {
+  justify-self: start;
+  min-width: 0;
+  max-width: min(420px, 40vw);
+  padding: 9px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.brand-title {
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.brand-user {
+  min-width: 0;
+  flex: 1 1 auto;
+  font-size: 12px;
+  color: var(--color-steel);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.clock-pill {
+  justify-self: center;
+  min-width: 0;
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+.clock-time {
+  min-width: 7ch;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+.clock-status {
+  display: inline-flex;
+  justify-content: flex-start;
+  min-width: 9.5ch;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+.status {
+  color: var(--color-primary);
+}
+
+.status-complete {
+  color: var(--color-success);
+}
+
+.pill-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--color-hairline);
+  opacity: 0.8;
+}
+
+.action-pill {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.action-pill > div[style*="position: relative"] {
+  border-radius: 8px;
+}
+
+.action-pill-splash {
+  --splash-scale: 0.5;
+  width: 80px !important;
+  height: 40px !important;
+  overflow: visible;
+}
+
+.action-pill-splash button {
+  transform: scale(var(--splash-scale, 0.5)) !important;
+  transform-origin: center center;
+}
+
+.topbar-action {
+  width: 32px;
+  height: 32px;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  color: var(--color-charcoal);
+  transition:
+    background-color 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    color 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.topbar-action:hover {
+  background: var(--color-hairline-soft);
+  color: var(--color-ink);
+}
+
+.topbar-action[data-active="true"] {
+  color: var(--color-primary);
+  background: color-mix(
+    in srgb,
+    var(--color-primary) 8%,
+    transparent
+  );
+}
+
+.topbar-action:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.update-dot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--color-canvas);
+}
+
+.action-pill [role="switch"]:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+@media (min-width: 1024px) {
+  .topbar-shell {
+    padding-inline: 24px;
+  }
+}
+
+@media (max-width: 700px) {
+  .topbar-shell {
+    grid-template-columns: minmax(0, 0.8fr) auto auto;
+    gap: 8px;
+  }
+
+  .brand-pill {
+    max-width: 100%;
+    padding-inline: 12px;
+  }
+
+  .clock-pill {
+    padding-inline: 10px;
+  }
+
+  .action-pill-splash {
+    --splash-scale: 0.45;
+    width: 99px !important;
+    height: 36px !important;
+  }
+
+  .action-pill-splash button {
+    transform: scale(var(--splash-scale)) !important;
+  }
+}
+
+@media (max-width: 560px) {
+  .topbar-shell {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    padding: 10px 12px;
+    gap: 6px;
+  }
+
+  .brand-user {
+    display: none;
+  }
+
+  .brand-pill {
+    padding-inline: 10px;
+  }
+
+  .clock-pill {
+    padding-inline: 8px;
+    gap: 6px;
+  }
+
+  .clock-pill > svg {
+    display: none;
+  }
+
+  .action-pill {
+    padding-inline: 4px;
+  }
+
+  .action-pill [role="switch"] {
+    width: 48px !important;
+  }
+
+  .action-pill-splash {
+    --splash-scale: 0.41;
+    width: 90px !important;
+    height: 33px !important;
+  }
+
+  .action-pill-splash button {
+    transform: scale(var(--splash-scale)) !important;
+  }
+}
+
+@media (max-width: 430px) {
+  .topbar-shell {
+    grid-template-columns: minmax(44px, 1fr) auto auto;
+    padding-inline: 10px;
+    gap: 4px;
+  }
+
+  .brand-pill {
+    padding-inline: 9px;
+  }
+
+  .brand-title {
+    font-size: 14px;
+  }
+
+  .clock-status,
+  .clock-pill .pill-divider {
+    display: none;
+  }
+
+  .action-pill {
+    gap: 3px;
+  }
+
+  .action-pill [role="switch"] {
+    width: 44px !important;
+  }
+
+  .action-pill-splash {
+    --splash-scale: 0.36;
+    width: 79px !important;
+    height: 29px !important;
+  }
+
+  .action-pill-splash button {
+    transform: scale(var(--splash-scale)) !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glass-pill,
+  .topbar-action {
+    transition-duration: 0.01ms;
+  }
+}
