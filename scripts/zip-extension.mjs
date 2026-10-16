@@ -9,6 +9,23 @@ import { Buffer } from 'buffer';
 const EXTENSION_DIR = 'extension';
 const OUTPUT = join('public', 'attendance-extension.zip');
 
+// Guard: the app shows EXTENSION_VERSION to prompt users about updates. It
+// must match the version actually packaged here, or users get a wrong prompt.
+// Fails fast, before building the zip.
+const manifest = JSON.parse(readFileSync(join(EXTENSION_DIR, 'manifest.json'), 'utf8'));
+const configSrc = readFileSync('src/utils/config.ts', 'utf8');
+const declared = configSrc.match(/\bEXTENSION_VERSION\s*=\s*["']([^"']+)["']/);
+if (!declared) {
+  console.error('✗ Could not find EXTENSION_VERSION in src/utils/config.ts');
+  process.exit(1);
+}
+if (declared[1] !== manifest.version) {
+  console.error(
+    `✗ Version mismatch: extension/manifest.json is ${manifest.version} but src/utils/config.ts says ${declared[1]}.`
+  );
+  process.exit(1);
+}
+
 // Minimal ZIP file creator (no external dependencies)
 class ZipWriter {
   constructor() {

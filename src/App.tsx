@@ -29,21 +29,35 @@ import {
   minutesToHHMM,
   shiftLengthMinutes,
 } from "./utils/liveTime";
+import {
+  APP_VERSION,
+  APP_VERSION_KEY,
+  BOOKMARKLET_VERSION,
+  BOOKMARKLET_VERSION_KEY,
+  EMP_ID_KEY,
+  EXTENSION_VERSION,
+  EXTENSION_VERSION_KEY,
+  LAST_SYNCED_KEY,
+  PROFILE_KEY,
+  STALE_FAILURE_WINDOW_MS,
+  STORAGE_KEY,
+  SYNC_TIMEOUT_MS,
+  THEME_KEY,
+  TODAY_KEY,
+  USER_KEY,
+} from "./utils/config";
+import { readEmpId, readJSON, readString, removeKey, writeJSON, writeString } from "./utils/storage";
+import {
+  dispatchSyncRequest,
+  EXTENSION_EVENTS,
+  isBookmarkletMessage,
+  isExtensionReadyFlagSet,
+  type AttendanceDataDetail,
+  type ProfileDataDetail,
+  type SyncStatusDetail,
+  type TodayPunchesDetail,
+} from "./features/sync/protocol";
 
-const STORAGE_KEY = "attendance-insights-data";
-const USER_KEY = "attendance-insights-user";
-const PROFILE_KEY = "attendance-insights-profile";
-const TODAY_KEY = "attendance-insights-today";
-const LAST_SYNCED_KEY = "attendance-last-synced";
-const EMP_ID_KEY = "attendance-empId";
-const BOOKMARKLET_VERSION = "6";
-const BOOKMARKLET_VERSION_KEY = "attendance-bookmarklet-version";
-const EXTENSION_VERSION = "2.7.0";
-const EXTENSION_VERSION_KEY = "attendance-extension-version";
-const APP_VERSION_KEY = "attendance-app-version";
-const APP_VERSION = __APP_VERSION__; // from package.json via vite define
-const SYNC_TIMEOUT_MS = 15000;
-const STALE_FAILURE_WINDOW_MS = 30000;
 // Module-level so React StrictMode's double-invoked effects (dev) and
 // remounts can't fire two auto-syncs that race each other in the extension.
 let autoSyncRequested = false;
@@ -119,10 +133,10 @@ function deriveTodayAttendance(rawPunches: RawPunch[]): TodayAttendance | null {
 }
 
 function loadSavedEntries(): SavedEntry[] {
-  try { const raw = localStorage.getItem(STORAGE_KEY); return raw ? JSON.parse(raw) : []; } catch { return []; }
+  return readJSON<SavedEntry[]>(STORAGE_KEY) ?? [];
 }
 
-function saveTolocalStorage(entries: SavedEntry[]) { localStorage.setItem(STORAGE_KEY, JSON.stringify(entries)); }
+function saveTolocalStorage(entries: SavedEntry[]) { writeJSON(STORAGE_KEY, entries); }
 
 /** Smooth scrolling unless the user asked the OS for reduced motion. */
 function scrollBehavior(): ScrollBehavior {
@@ -331,7 +345,7 @@ function App() {
   const sortedEntries = useMemo(() => {
     return savedEntries.slice().sort((a, b) => b.key.localeCompare(a.key));
   }, [savedEntries]);
-  const [userName, setUserName] = useState(() => localStorage.getItem(USER_KEY) || "");
+  const [userName, setUserName] = useState(() => readString(USER_KEY) || "");
   const [showAllDays, setShowAllDays] = useState(false);
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains("dark"));
   const [toast, setToast] = useState<string | null>(null);
@@ -341,7 +355,7 @@ function App() {
     setToast(msg);
     toastTimerRef.current = window.setTimeout(() => setToast(null), ms);
   }, []);
-  const [lastSynced, setLastSynced] = useState<string | null>(() => localStorage.getItem(LAST_SYNCED_KEY));
+  const [lastSynced, setLastSynced] = useState<string | null>(() => readString(LAST_SYNCED_KEY));
   const [extensionAvailable, setExtensionAvailable] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const syncingRef = useRef(false);
@@ -371,26 +385,20 @@ function App() {
     // Rehydrate today's punches from the last successful sync — but only if the
     // stored data is actually for today (LOCAL date), so stale punches from a
     // previous day don't linger.
-    try {
-      const raw = localStorage.getItem(TODAY_KEY);
-      if (!raw) return null;
-      const stored = JSON.parse(raw) as TodayAttendance;
-      return stored.date === localDateString() ? stored : null;
-    } catch {
-      return null;
-    }
+    const stored = readJSON<TodayAttendance>(TODAY_KEY);
+    return stored && stored.date === localDateString() ? stored : null;
   });
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [hasUpdate, setHasUpdate] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
-  const [employeeProfile, setEmployeeProfile] = useState<EmployeeProfile | null>(() => {
-    try { const raw = localStorage.getItem(PROFILE_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; }
-  });
+  const [employeeProfile, setEmployeeProfile] = useState<EmployeeProfile | null>(
+    () => readJSON<EmployeeProfile>(PROFILE_KEY)
+  );
 
   // Version check — detect new app/extension versions and prompt update
   useEffect(() => {
-    const storedAppVersion = localStorage.getItem(APP_VERSION_KEY);
-    const storedExtVersion = localStorage.getItem(EXTENSION_VERSION_KEY);
+    const storedAppVersion = readString(APP_VERSION_KEY);
+    const storedExtVersion = readString(EXTENSION_VERSION_KEY);
     if (storedAppVersion && storedAppVersion !== APP_VERSION) {
       setHasUpdate(true);
       setShowOnboarding(true);
@@ -399,15 +407,15 @@ function App() {
       setHasUpdate(true);
     }
     // Save current versions
-    localStorage.setItem(APP_VERSION_KEY, APP_VERSION);
-    localStorage.setItem(EXTENSION_VERSION_KEY, EXTENSION_VERSION);
+    writeString(APP_VERSION_KEY, APP_VERSION);
+    writeString(EXTENSION_VERSION_KEY, EXTENSION_VERSION);
   }, []);
 
   // Midnight rollover: yesterday's live punches must not keep showing as "Today".
   useEffect(() => {
     if (todayAttendance && todayAttendance.date !== today) {
       setTodayAttendance(null);
-      try { localStorage.removeItem(TODAY_KEY); } catch { /* ignore */ }
+      removeKey(TODAY_KEY);
     }
   }, [today, todayAttendance]);
 
@@ -440,7 +448,7 @@ function App() {
           setTodayAttendance(t && t.date === localDateString() ? t : null);
           break;
         }
-        case "theme": {
+        case THEME_KEY: {
           const dark = e.newValue === "dark";
           document.documentElement.classList.toggle("dark", dark);
           setIsDark(dark);
@@ -576,7 +584,7 @@ function App() {
 
     // Save employee ID for future Sync Now use
     if (data[0].employeeId) {
-      localStorage.setItem(EMP_ID_KEY, String(data[0].employeeId));
+      writeString(EMP_ID_KEY, String(data[0].employeeId));
     }
 
     const normalized = normalizeRecords(data);
@@ -601,7 +609,7 @@ function App() {
 
     const syncedAt = new Date().toISOString();
     setLastSynced(syncedAt);
-    localStorage.setItem(LAST_SYNCED_KEY, syncedAt);
+    writeString(LAST_SYNCED_KEY, syncedAt);
 
     if (shrank && previous) {
       setUndoEntry({
@@ -633,41 +641,41 @@ function App() {
   }, [undoEntry, showToast]);
 
   useEffect(() => {
-    const h = (event: Event) => { const e = event as CustomEvent<{ records: AttendanceRecord[] }>; if (e.detail?.records) handleDataParsed(e.detail.records); };
-    window.addEventListener("AttendanceDataFromExtension", h);
-    return () => window.removeEventListener("AttendanceDataFromExtension", h);
+    const h = (event: Event) => { const e = event as CustomEvent<AttendanceDataDetail>; if (e.detail?.records) handleDataParsed(e.detail.records); };
+    window.addEventListener(EXTENSION_EVENTS.attendanceData, h);
+    return () => window.removeEventListener(EXTENSION_EVENTS.attendanceData, h);
   }, [handleDataParsed]);
 
   // Listen for profile data from extension
   useEffect(() => {
     const h = (event: Event) => {
-      const e = event as CustomEvent<{ profile: EmployeeProfile }>;
+      const e = event as CustomEvent<ProfileDataDetail>;
       if (e.detail?.profile) {
         setEmployeeProfile(e.detail.profile);
-        localStorage.setItem(PROFILE_KEY, JSON.stringify(e.detail.profile));
+        writeJSON(PROFILE_KEY, e.detail.profile);
         if (e.detail.profile.employeeName) {
           setUserName(e.detail.profile.employeeName);
-          localStorage.setItem(USER_KEY, e.detail.profile.employeeName);
+          writeString(USER_KEY, e.detail.profile.employeeName);
         }
       }
     };
-    window.addEventListener("ProfileDataFromExtension", h);
-    return () => window.removeEventListener("ProfileDataFromExtension", h);
+    window.addEventListener(EXTENSION_EVENTS.profileData, h);
+    return () => window.removeEventListener(EXTENSION_EVENTS.profileData, h);
   }, []);
 
   // Listen for today's punch data from extension
   useEffect(() => {
     const h = (event: Event) => {
-      const e = event as CustomEvent<{ punches: RawPunch[] }>;
+      const e = event as CustomEvent<TodayPunchesDetail>;
       const todayData = deriveTodayAttendance(e.detail?.punches ?? []);
       if (todayData) {
         setTodayAttendance(todayData);
         // Persist so the "Today" card survives reloads and HROne slowness
-        try { localStorage.setItem(TODAY_KEY, JSON.stringify(todayData)); } catch { /* ignore */ }
+        try { writeJSON(TODAY_KEY, todayData); } catch { /* ignore */ }
       }
     };
-    window.addEventListener("TodayPunchesFromExtension", h);
-    return () => window.removeEventListener("TodayPunchesFromExtension", h);
+    window.addEventListener(EXTENSION_EVENTS.todayPunches, h);
+    return () => window.removeEventListener(EXTENSION_EVENTS.todayPunches, h);
   }, []);
 
   // Detect extension availability
@@ -678,12 +686,12 @@ function App() {
       readyHandled = true;
       setExtensionAvailable(true);
       // Auto-sync on page load if employee ID exists
-      let empId = parseInt(localStorage.getItem("attendance-empId") || "0");
+      let empId = readEmpId();
       if (!empId && savedEntries.length > 0) {
         const firstRecord = savedEntries[0].records[0];
         if (firstRecord) {
           empId = firstRecord.employeeId;
-          localStorage.setItem("attendance-empId", String(empId));
+          writeString(EMP_ID_KEY, String(empId));
         }
       }
       if (empId && !autoSyncRequested) {
@@ -696,14 +704,12 @@ function App() {
           setSyncing(false);
         }, SYNC_TIMEOUT_MS);
         const now = new Date();
-        window.dispatchEvent(new CustomEvent("RequestAttendanceSync", {
-          detail: { employeeId: empId, month: now.getMonth() + 1, year: now.getFullYear() }
-        }));
+        dispatchSyncRequest({ employeeId: empId, month: now.getMonth() + 1, year: now.getFullYear() });
       }
     };
-    window.addEventListener("AttendanceExtensionReady", onReady);
+    window.addEventListener(EXTENSION_EVENTS.ready, onReady);
     // Check if already set (extension loaded before React)
-    if ((window as unknown as { __attendanceExtensionReady?: boolean }).__attendanceExtensionReady) {
+    if (isExtensionReadyFlagSet()) {
       onReady();
     }
     // Belt-and-suspenders: receiver.js may set the flag slightly after this
@@ -713,7 +719,7 @@ function App() {
     let polls = 0;
     const poll = window.setInterval(() => {
       polls++;
-      if ((window as unknown as { __attendanceExtensionReady?: boolean }).__attendanceExtensionReady) {
+      if (isExtensionReadyFlagSet()) {
         onReady();
         window.clearInterval(poll);
       } else if (polls >= 20) {
@@ -721,7 +727,7 @@ function App() {
       }
     }, 250);
     return () => {
-      window.removeEventListener("AttendanceExtensionReady", onReady);
+      window.removeEventListener(EXTENSION_EVENTS.ready, onReady);
       window.clearInterval(poll);
     };
   }, []);
@@ -729,7 +735,7 @@ function App() {
   // Listen for sync status from extension
   useEffect(() => {
     const h = (event: Event) => {
-      const e = event as CustomEvent<{ success: boolean; error?: string }>;
+      const e = event as CustomEvent<SyncStatusDetail>;
       if (e.detail && !e.detail.success) {
         if (Date.now() - lastDataAtRef.current < STALE_FAILURE_WINDOW_MS) {
           console.info("[Attendance] Ignoring sync failure from an overlapping request:", e.detail.error);
@@ -739,12 +745,12 @@ function App() {
       }
       finishSync();
     };
-    window.addEventListener("ExtensionSyncStatus", h);
-    return () => window.removeEventListener("ExtensionSyncStatus", h);
+    window.addEventListener(EXTENSION_EVENTS.syncStatus, h);
+    return () => window.removeEventListener(EXTENSION_EVENTS.syncStatus, h);
   }, [finishSync]);
 
   const resolveEmpId = useCallback((): number => {
-    let empId = parseInt(localStorage.getItem(EMP_ID_KEY) || "0");
+    let empId = readEmpId();
     if (!empId && employeeProfile) empId = employeeProfile.employeeId;
     if (!empId && savedEntries.length > 0) {
       const firstRecord = savedEntries[0].records[0];
@@ -754,7 +760,7 @@ function App() {
   }, [employeeProfile, savedEntries]);
 
   const startSync = useCallback((empId: number) => {
-    localStorage.setItem(EMP_ID_KEY, String(empId));
+    writeString(EMP_ID_KEY, String(empId));
     const current = new Date();
     // Sync the month currently selected in the sidebar (activeKey is "YYYY-MM").
     // Fall back to the current month when nothing is selected (first-time user).
@@ -770,9 +776,7 @@ function App() {
     setSyncError(null);
     syncingRef.current = true;
     setSyncing(true);
-    window.dispatchEvent(new CustomEvent("RequestAttendanceSync", {
-      detail: { employeeId: empId, month: syncMonth, year: syncYear }
-    }));
+    dispatchSyncRequest({ employeeId: empId, month: syncMonth, year: syncYear });
     // No response at all → say so instead of silently re-enabling the button.
     window.clearTimeout(syncTimeoutRef.current);
     syncTimeoutRef.current = window.setTimeout(() => {
@@ -793,28 +797,27 @@ function App() {
 
   useEffect(() => {
     const h = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin && !event.origin.includes("hrone.cloud")) return;
-      if (event.data?.type === "ATTENDANCE_DATA" && Array.isArray(event.data.records)) {
-        handleDataParsed(event.data.records);
-        if (event.data.userName) { setUserName(event.data.userName); localStorage.setItem(USER_KEY, event.data.userName); }
-        // Handle profile data
-        if (event.data.profile) {
-          setEmployeeProfile(event.data.profile);
-          localStorage.setItem(PROFILE_KEY, JSON.stringify(event.data.profile));
-        }
-        // Track bookmarklet version
-        if (event.data.v) {
-          localStorage.setItem(BOOKMARKLET_VERSION_KEY, event.data.v);
-        }
-        // Today's live attendance (bookmarklet parity with the extension).
-        // Without this, todayAttendance stays null and the ProfilePanel always
-        // shows "Last Working Day" even when today's punches exist in HROne.
-        if (Array.isArray(event.data.todayPunches)) {
-          const todayData = deriveTodayAttendance(event.data.todayPunches);
-          if (todayData) {
-            setTodayAttendance(todayData);
-            try { localStorage.setItem(TODAY_KEY, JSON.stringify(todayData)); } catch { /* ignore */ }
-          }
+      if (!isBookmarkletMessage(event)) return;
+      const { records, userName: incomingName, profile, todayPunches, v } = event.data;
+      handleDataParsed(records);
+      if (incomingName) { setUserName(incomingName); writeString(USER_KEY, incomingName); }
+      // Handle profile data
+      if (profile) {
+        setEmployeeProfile(profile);
+        writeJSON(PROFILE_KEY, profile);
+      }
+      // Track bookmarklet version
+      if (v) {
+        writeString(BOOKMARKLET_VERSION_KEY, v);
+      }
+      // Today's live attendance (bookmarklet parity with the extension).
+      // Without this, todayAttendance stays null and the ProfilePanel always
+      // shows "Last Working Day" even when today's punches exist in HROne.
+      if (Array.isArray(todayPunches)) {
+        const todayData = deriveTodayAttendance(todayPunches);
+        if (todayData) {
+          setTodayAttendance(todayData);
+          try { writeJSON(TODAY_KEY, todayData); } catch { /* ignore */ }
         }
       }
     };
@@ -967,7 +970,7 @@ function App() {
                 html.classList.add("theme-transitioning");
                 const newDark = !isDark;
                 if (newDark) { html.classList.add("dark"); } else { html.classList.remove("dark"); }
-                localStorage.setItem("theme", newDark ? "dark" : "light");
+                writeString(THEME_KEY, newDark ? "dark" : "light");
                 setIsDark(newDark);
                 setTimeout(() => html.classList.remove("theme-transitioning"), 500);
               }}
