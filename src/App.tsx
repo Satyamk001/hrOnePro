@@ -12,6 +12,7 @@ import DayTable from "./components/DayTable";
 import ProfilePanel from "./components/ProfilePanel";
 import TodayCard from "./components/TodayCard";
 import PrivacyPage from "./components/PrivacyPage";
+import AmbientBackground from "./components/AmbientBackground";
 import { GlassToggle } from "./components/ui/GlassToggle";
 import { SplashButton } from "./components/ui/SplashButton";
 import { ClickRipple } from "./components/ui/ClickRipple";
@@ -908,6 +909,9 @@ function App() {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-canvas relative">
+      {/* Ambient Multi-Layer Atmospheric Canvas */}
+      <AmbientBackground />
+
       {/* Glassmorphism Three-Pill Navigation */}
       <header ref={headerRef} className="topbar absolute top-0 left-0 right-0 z-30 pointer-events-none">
         <div className="topbar-shell pointer-events-auto">
