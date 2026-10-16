@@ -7,18 +7,37 @@ interface TodayCardProps {
   todayAttendance: TodayAttendance | null;
   /** Today's scheduled shift length in minutes (from HROne shift times). */
   shiftMinutes: number;
+  placeholderRef?: React.RefObject<HTMLDivElement | null>;
+  morphingRef?: React.RefObject<HTMLDivElement | null>;
+  contentRef?: React.RefObject<HTMLDivElement | null>;
+  sheenRef?: React.RefObject<HTMLDivElement | null>;
 }
 
 /** Live "Today" summary for the main column — ticks every second. */
-export default function TodayCard({ todayAttendance, shiftMinutes }: TodayCardProps) {
+export default function TodayCard({
+  todayAttendance,
+  shiftMinutes,
+  placeholderRef,
+  morphingRef,
+  contentRef,
+  sheenRef,
+}: TodayCardProps) {
   const now = useNow(1000);
   const dateLabel = now.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
   if (!todayAttendance) {
     return (
-      <div className="rounded-lg border border-hairline bg-cream p-5">
-        <p className="text-xs font-medium uppercase tracking-wide text-steel">Today · {dateLabel}</p>
-        <p className="text-sm text-slate mt-1">No punches recorded yet today. Sync after you punch in.</p>
+      <div ref={placeholderRef} className="relative w-full">
+        <div
+          ref={morphingRef}
+          className="droplet-morph-card rounded-lg border border-hairline bg-cream p-5 relative overflow-hidden"
+        >
+          <div ref={sheenRef} className="droplet-sheen opacity-0 pointer-events-none" aria-hidden="true" />
+          <div ref={contentRef} className="droplet-content">
+            <p className="text-xs font-medium uppercase tracking-wide text-steel">Today · {dateLabel}</p>
+            <p className="text-sm text-slate mt-1">No punches recorded yet today. Sync after you punch in.</p>
+          </div>
+        </div>
       </div>
     );
   }
@@ -31,7 +50,13 @@ export default function TodayCard({ todayAttendance, shiftMinutes }: TodayCardPr
   const remaining = leaveMinutes === null ? null : leaveMinutes - nowMinutes;
 
   return (
-    <div className="rounded-lg border border-beige-deep bg-cream p-5">
+    <div ref={placeholderRef} className="relative w-full">
+      <div
+        ref={morphingRef}
+        className="droplet-morph-card rounded-lg border border-beige-deep bg-cream p-5 relative overflow-hidden"
+      >
+        <div ref={sheenRef} className="droplet-sheen opacity-0 pointer-events-none" aria-hidden="true" />
+        <div ref={contentRef} className="droplet-content">
       <div className="flex items-center justify-between mb-4">
         <p className="text-xs font-medium uppercase tracking-wide text-steel">Today · {dateLabel}</p>
         {todayAttendance.isStillIn && (
@@ -85,6 +110,8 @@ export default function TodayCard({ todayAttendance, shiftMinutes }: TodayCardPr
           })}
         </div>
       )}
+        </div>
+      </div>
     </div>
   );
 }

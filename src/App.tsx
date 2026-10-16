@@ -17,6 +17,7 @@ import { SplashButton } from "./components/ui/SplashButton";
 import { ClickRipple } from "./components/ui/ClickRipple";
 import AnimatedCounter from "./components/ui/AnimatedCounter";
 import { useNow } from "./hooks/useNow";
+import { useDropletMerge } from "./hooks/useDropletMerge";
 import {
   DEFAULT_SHIFT_MINUTES,
   formatRelativeAge,
@@ -24,6 +25,7 @@ import {
   leaveAtMinutes,
   localDateDaysAgo,
   localDateString,
+  minutesToHHMM,
   shiftLengthMinutes,
 } from "./utils/liveTime";
 
@@ -179,25 +181,42 @@ function LiveClock({ todayAttendance, shiftMinutes }: { todayAttendance: TodayAt
   const minutes = now.getMinutes();
   const seconds = now.getSeconds();
 
-  // Calculate time left if we have today's punch data
+  // Calculate Today attendance metrics matching TodayCard
   let timeLeftDisplay: string | null = null;
   let shiftComplete = false;
+  let workedValueDisplay: string | null = null;
+  let punchesCountDisplay: number | null = null;
+  let shiftValueDisplay: string | null = null;
+  let canLeaveDisplay: string | null = null;
 
-  const leaveMinutes = todayAttendance?.firstPunch ? leaveAtMinutes(todayAttendance.firstPunch, shiftMinutes) : null;
-  if (leaveMinutes !== null) {
+  if (todayAttendance?.firstPunch) {
+    const [h, m] = todayAttendance.firstPunch.split(":").map(Number);
     const nowMinutes = now.getHours() * 60 + now.getMinutes();
-    const diff = leaveMinutes - nowMinutes;
+    const workedSoFar = Math.max(0, nowMinutes - (h * 60 + m));
+    workedValueDisplay = formatMinutes(workedSoFar);
 
-    if (diff <= 0) {
-      const extra = Math.abs(diff);
-      const extraH = Math.floor(extra / 60);
-      const extraM = extra % 60;
-      shiftComplete = true;
-      timeLeftDisplay = `+${extraH}h ${extraM}m extra`;
-    } else {
-      const hoursLeft = Math.floor(diff / 60);
-      const minsLeft = diff % 60;
-      timeLeftDisplay = `${hoursLeft}h ${minsLeft}m left`;
+    punchesCountDisplay = todayAttendance.punchCount;
+
+    const shiftH = Math.floor(shiftMinutes / 60);
+    const shiftM = shiftMinutes % 60;
+    shiftValueDisplay = shiftM > 0 ? `${shiftH}h ${shiftM}m` : `${shiftH}h`;
+
+    const leaveMinutes = leaveAtMinutes(todayAttendance.firstPunch, shiftMinutes);
+    if (leaveMinutes !== null) {
+      canLeaveDisplay = minutesToHHMM(leaveMinutes);
+      const diff = leaveMinutes - nowMinutes;
+
+      if (diff <= 0) {
+        const extra = Math.abs(diff);
+        const extraH = Math.floor(extra / 60);
+        const extraM = extra % 60;
+        shiftComplete = true;
+        timeLeftDisplay = `+${extraH}h ${extraM}m extra`;
+      } else {
+        const hoursLeft = Math.floor(diff / 60);
+        const minsLeft = diff % 60;
+        timeLeftDisplay = `${hoursLeft}h ${minsLeft}m left`;
+      }
     }
   }
 
@@ -208,7 +227,7 @@ function LiveClock({ todayAttendance, shiftMinutes }: { todayAttendance: TodayAt
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
       <span
-        className="font-mono text-sm font-semibold text-ink tabular-nums inline-flex items-center clock-time"
+        className="font-mono text-sm font-semibold text-ink tabular-nums inline-flex items-center clock-time shrink-0"
         role="timer"
         aria-label={`Current time ${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`}
       >
@@ -220,8 +239,10 @@ function LiveClock({ todayAttendance, shiftMinutes }: { todayAttendance: TodayAt
           <PaddedCounter value={seconds} duration={0.3} continuous separator={false} className="text-sm font-mono text-ink" />
         </span>
       </span>
+
+      {/* COMPACT STATE: visible at rest & low scroll */}
       {timeLeftDisplay && (
-        <>
+        <span className="clock-compact-section inline-flex items-center">
           <div className="pill-divider" />
           <span
             className={`clock-status text-xs font-medium ${shiftComplete ? "status-complete" : "status"}`}
@@ -229,7 +250,71 @@ function LiveClock({ todayAttendance, shiftMinutes }: { todayAttendance: TodayAt
           >
             {timeLeftDisplay}
           </span>
-        </>
+        </span>
+      )}
+
+      {/* EXPANDED TODAY SUMMARY: reveals progressively as clock pill absorbs Today card */}
+      {todayAttendance?.firstPunch && (
+        <span className="clock-expanded-section inline-flex items-center">
+          {/* Metric 1: Worked so far */}
+          <span className="clock-expanded-item clock-item-worked inline-flex items-center shrink-0">
+            <span className="clock-pill-divider" aria-hidden="true" />
+            <span
+              className={`w-1.5 h-1.5 rounded-full mr-1.5 shrink-0 ${
+                todayAttendance.isStillIn
+                  ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] animate-pulse"
+                  : "bg-steel/60"
+              }`}
+              aria-hidden="true"
+            />
+            <span className="text-xs font-mono font-semibold text-ink tabular-nums">
+              {workedValueDisplay}
+            </span>
+            <span className="text-[11px] text-steel font-normal ml-1">worked</span>
+          </span>
+
+          {/* Metric 2: Punches (Desktop only) */}
+          {punchesCountDisplay !== null && (
+            <span className="clock-expanded-item clock-item-punches hidden md:inline-flex items-center shrink-0">
+              <span className="clock-pill-divider" aria-hidden="true" />
+              <span className="text-xs font-mono font-semibold text-ink tabular-nums">
+                {punchesCountDisplay}
+              </span>
+              <span className="text-[11px] text-steel font-normal ml-1">
+                {punchesCountDisplay === 1 ? "punch" : "punches"}
+              </span>
+            </span>
+          )}
+
+          {/* Metric 3: Shift (Tablet + Desktop) */}
+          {shiftValueDisplay && (
+            <span className="clock-expanded-item clock-item-shift hidden sm:inline-flex items-center shrink-0">
+              <span className="clock-pill-divider" aria-hidden="true" />
+              <span className="text-xs font-mono font-semibold text-ink tabular-nums">
+                {shiftValueDisplay}
+              </span>
+              <span className="text-[11px] text-steel font-normal ml-1">shift</span>
+            </span>
+          )}
+
+          {/* Metric 4: Can leave at */}
+          {canLeaveDisplay && (
+            <span className="clock-expanded-item clock-item-leave inline-flex items-center shrink-0">
+              <span className="clock-pill-divider" aria-hidden="true" />
+              <span className="text-[11px] text-steel font-normal mr-1">leave</span>
+              <span
+                className={`text-xs font-mono font-semibold tabular-nums ${
+                  shiftComplete
+                    ? "text-emerald-600 dark:text-emerald-400"
+                    : "text-primary"
+                }`}
+                title={timeLeftDisplay ? `${timeLeftDisplay} (shift target ${canLeaveDisplay})` : undefined}
+              >
+                {canLeaveDisplay}
+              </span>
+            </span>
+          )}
+        </span>
       )}
     </>
   );
@@ -256,6 +341,14 @@ function App() {
   const [extensionAvailable, setExtensionAvailable] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const syncingRef = useRef(false);
+
+  // Droplet Merge — Liquid sticky header animation refs
+  const mainRef = useRef<HTMLElement>(null);
+  const clockPillRef = useRef<HTMLDivElement>(null);
+  const todayCardPlaceholderRef = useRef<HTMLDivElement>(null);
+  const morphingDropletRef = useRef<HTMLDivElement>(null);
+  const cardContentRef = useRef<HTMLDivElement>(null);
+  const dropletSheenRef = useRef<HTMLDivElement>(null);
   // When records last arrived. A failure status that arrives right after a
   // success comes from a duplicate/overlapping request and must not show an error.
   const lastDataAtRef = useRef(0);
@@ -799,6 +892,16 @@ function App() {
   const freshness = getFreshness(lastSynced, now);
   const syncedAgo = formatRelativeAge(lastSynced, now);
 
+  useDropletMerge({
+    mainRef,
+    clockPillRef,
+    placeholderRef: todayCardPlaceholderRef,
+    morphingRef: morphingDropletRef,
+    contentRef: cardContentRef,
+    sheenRef: dropletSheenRef,
+    active: !!enrichedRecords,
+  });
+
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-canvas relative">
       {/* Glassmorphism Three-Pill Navigation */}
@@ -818,7 +921,7 @@ function App() {
           </div>
 
           {/* Pill 2 — Time / Status (Center) */}
-          <div className="glass-pill clock-pill">
+          <div className="glass-pill clock-pill" ref={clockPillRef}>
             <LiveClock todayAttendance={effectiveTodayAttendance} shiftMinutes={todayShiftMinutes} />
           </div>
 
@@ -972,7 +1075,7 @@ function App() {
         </aside>
 
         {/* Main */}
-        <main className="flex-1 overflow-y-auto scrollbar-hidden pt-10">
+        <main ref={mainRef} className="flex-1 overflow-y-auto scrollbar-hidden pt-10">
           {showPrivacy ? (
             <PrivacyPage onBack={() => setShowPrivacy(false)} />
           ) : (
@@ -1165,7 +1268,16 @@ function App() {
                     </div>
                   </div>
 
-                  {enrichedRecords && <TodayCard todayAttendance={effectiveTodayAttendance} shiftMinutes={todayShiftMinutes} />}
+                  {enrichedRecords && (
+                    <TodayCard
+                      todayAttendance={effectiveTodayAttendance}
+                      shiftMinutes={todayShiftMinutes}
+                      placeholderRef={todayCardPlaceholderRef}
+                      morphingRef={morphingDropletRef}
+                      contentRef={cardContentRef}
+                      sheenRef={dropletSheenRef}
+                    />
+                  )}
                   {dashboardMetrics && <Dashboard metrics={dashboardMetrics} />}
 
                   {tableRecords && (
