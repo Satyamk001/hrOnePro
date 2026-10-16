@@ -1,0 +1,9 @@
+{
+  "name": "attendance-insights-brag",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "hyperframes preview",
+    "check": "hyperframes check",
+    "render": "hyperframes render"
+  }
+}

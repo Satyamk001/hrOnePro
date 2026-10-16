@@ -1,0 +1,2 @@
+Introducing Attendance Insights: the zero-install analytics dashboard that calculates your exact departure time and monthly overtime balance directly from HROne punches. Stop doing mental math in the elevator — leave on time, every time.
+Built with React 19, Vite, and 100% private client-side browser storage.
