@@ -10,6 +10,7 @@
 (function () {
   const ATTENDANCE_URL = "attendance/Calendar";
   const PROFILE_URL = "Employee/EmployeeInformation";
+  const RAW_PUNCH_URL = "attendance/RawPunch";
 
   function dispatchRecords(records, sourceUrl) {
     console.log(
@@ -22,6 +23,33 @@
         detail: { records, sourceUrl },
       })
     );
+  }
+
+  function dispatchTodayPunches(punches) {
+    console.log(
+      "[Attendance Interceptor] ✓ Dispatching",
+      punches.length,
+      "today punches to content.js"
+    );
+    window.dispatchEvent(
+      new CustomEvent("InterceptedTodayPunches", {
+        detail: { punches },
+      })
+    );
+  }
+
+  function tryExtractPunches(text, url) {
+    try {
+      const data = JSON.parse(text);
+      const punches = Array.isArray(data) ? data : (data.data || data.result || []);
+      if (Array.isArray(punches) && punches.length > 0 && punches[0].punchDateTime) {
+        dispatchTodayPunches(punches);
+        return true;
+      }
+    } catch (e) {
+      // not JSON
+    }
+    return false;
   }
 
   function dispatchProfile(profile) {
@@ -105,6 +133,11 @@
           const clone = response.clone();
           const text = await clone.text();
           tryExtractProfile(text, url);
+        } else if (response.ok && url.includes(RAW_PUNCH_URL)) {
+          console.log("[Attendance Interceptor] fetch intercepted punches:", url);
+          const clone = response.clone();
+          const text = await clone.text();
+          tryExtractPunches(text, url);
         }
       } catch (err) {
         console.warn("[Attendance Interceptor] fetch patch error:", err);
@@ -133,6 +166,9 @@
             } else if (this._interceptUrl.includes(PROFILE_URL)) {
               console.log("[Attendance Interceptor] XHR intercepted profile:", this._interceptUrl);
               tryExtractProfile(this.responseText, this._interceptUrl);
+            } else if (this._interceptUrl.includes(RAW_PUNCH_URL)) {
+              console.log("[Attendance Interceptor] XHR intercepted punches:", this._interceptUrl);
+              tryExtractPunches(this.responseText, this._interceptUrl);
             }
           }
         } catch (err) {

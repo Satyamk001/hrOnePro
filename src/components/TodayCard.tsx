@@ -54,6 +54,37 @@ export default function TodayCard({ todayAttendance, shiftMinutes }: TodayCardPr
           sub={remaining === null ? undefined : remaining > 0 ? `${formatMinutes(remaining)} left` : `+${formatMinutes(-remaining)} extra`}
         />
       </div>
+
+      {todayAttendance.rawPunches && todayAttendance.rawPunches.length > 0 && (
+        <div className="mt-4 pt-3 border-t border-hairline/60 flex flex-wrap items-center gap-2">
+          <span className="text-[10px] text-steel uppercase tracking-wide mr-1">Punch Log:</span>
+          {todayAttendance.rawPunches.map((p, idx) => {
+            const timeStr = p.punchDateTime.split("T")[1]?.slice(0, 5) || p.punchDateTime;
+            const isLatest = idx === todayAttendance.rawPunches!.length - 1;
+            return (
+              <span
+                key={idx}
+                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-mono border ${
+                  isLatest
+                    ? "bg-canvas border-primary/40 text-ink shadow-sm"
+                    : "bg-canvas/60 border-hairline text-slate"
+                }`}
+                title={`${p.punchSource || "Punch"} at ${p.punchDateTime}`}
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    isLatest && todayAttendance.isStillIn ? "bg-primary animate-pulse" : "bg-steel"
+                  }`}
+                />
+                <span>{timeStr}</span>
+                {p.punchSourceCode && (
+                  <span className="text-[10px] text-steel font-sans font-medium uppercase">{p.punchSourceCode}</span>
+                )}
+              </span>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

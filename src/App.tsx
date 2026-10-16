@@ -33,9 +33,9 @@ const PROFILE_KEY = "attendance-insights-profile";
 const TODAY_KEY = "attendance-insights-today";
 const LAST_SYNCED_KEY = "attendance-last-synced";
 const EMP_ID_KEY = "attendance-empId";
-const BOOKMARKLET_VERSION = "5";
+const BOOKMARKLET_VERSION = "6";
 const BOOKMARKLET_VERSION_KEY = "attendance-bookmarklet-version";
-const EXTENSION_VERSION = "2.6.0";
+const EXTENSION_VERSION = "2.7.0";
 const EXTENSION_VERSION_KEY = "attendance-extension-version";
 const APP_VERSION_KEY = "attendance-app-version";
 const APP_VERSION = __APP_VERSION__; // from package.json via vite define
@@ -101,13 +101,17 @@ function deriveTodayAttendance(rawPunches: RawPunch[]): TodayAttendance | null {
   // Still "in" when there's an odd number of punches
   const isStillIn = punches.length % 2 !== 0;
 
+  const formatHHMM = (d: Date) =>
+    `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+
   return {
     date,
-    firstPunch: firstTime.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }),
-    lastPunch: lastTime.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }),
+    firstPunch: formatHHMM(firstTime),
+    lastPunch: formatHHMM(lastTime),
     punchCount: punches.length,
     workedMinutesSoFar,
     isStillIn,
+    rawPunches: punches,
   };
 }
 

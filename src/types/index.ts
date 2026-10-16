@@ -145,4 +145,5 @@ export interface TodayAttendance {
   punchCount: number;
   workedMinutesSoFar: number;
   isStillIn: boolean;
+  rawPunches?: RawPunch[];
 }

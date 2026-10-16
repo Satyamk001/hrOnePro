@@ -114,12 +114,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       'pragma': 'no-cache'
     };
 
-    let profileDone = false;
-    let attendanceDone = false;
-    let punchDone = false;
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
     // Fetch profile
-    fetch(location.origin + '/api/workforce/Employee/EmployeeInformation/' + employeeId, {
+    const profilePromise = fetch(location.origin + '/api/workforce/Employee/EmployeeInformation/' + employeeId, {
       method: 'GET', headers: hdrs, credentials: 'include'
     }).then(r => r.ok ? r.json() : null).then(data => {
       if (data) {
@@ -141,32 +140,42 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           try { chrome.runtime.sendMessage({ type: "PROFILE_DATA_INTERCEPTED", payload: { profile } }); } catch(e) {}
         }
       }
-    }).catch(() => {}).then(() => { profileDone = true; });
-
-    // Fetch attendance
-    fetch(location.origin + '/api/timeoffice/attendance/Calendar', {
-      method: 'POST', headers: hdrs, credentials: 'include',
-      body: JSON.stringify({ attendanceYear: year, attendanceMonth: month, employeeId: employeeId, calendarViewType: 'C' })
-    }).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
-    .then(text => {
-      const data = JSON.parse(text);
-      const records = Array.isArray(data) ? data : (data.data || data.result || []);
-      if (records.length > 0) {
-        try { chrome.runtime.sendMessage({ type: "ATTENDANCE_DATA_INTERCEPTED", payload: { records, sourceUrl: "sync-now" } }); } catch(e) {}
-      }
-    }).catch(err => {
-      console.error("[Attendance Interceptor] content.js: fetch attendance error:", err.message);
-    }).then(() => { attendanceDone = true; });
+    }).catch(() => {});
 
     // Fetch today's punches
-    const today = new Date().toISOString().split('T')[0];
-    fetch(location.origin + '/api/timeoffice/attendance/RawPunch/' + employeeId + '/' + today + '/true', {
+    const punchPromise = fetch(location.origin + '/api/timeoffice/attendance/RawPunch/' + employeeId + '/' + today + '/true', {
       method: 'GET', headers: hdrs, credentials: 'include'
     }).then(r => r.ok ? r.json() : null).then(data => {
       if (data && Array.isArray(data) && data.length > 0) {
         try { chrome.runtime.sendMessage({ type: "TODAY_PUNCHES_INTERCEPTED", payload: { punches: data } }); } catch(e) {}
       }
-    }).catch(() => {}).then(() => { punchDone = true; });
+    }).catch(() => {});
+
+    // Fetch attendance
+    const attendancePromise = fetch(location.origin + '/api/timeoffice/attendance/Calendar', {
+      method: 'POST', headers: hdrs, credentials: 'include',
+      body: JSON.stringify({ attendanceYear: year, attendanceMonth: month, employeeId: employeeId, calendarViewType: 'C' })
+    }).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+    .then(text => {
+      const data = JSON.parse(text);
+      return Array.isArray(data) ? data : (data.data || data.result || []);
+    }).catch(err => {
+      console.error("[Attendance Interceptor] content.js: fetch attendance error:", err.message);
+      return [];
+    });
+
+    // Wait for punches & profile before sending attendance records,
+    // so background doesn't close the background sync tab prematurely!
+    Promise.all([profilePromise, punchPromise, attendancePromise]).then(([_, __, records]) => {
+      if (records && records.length > 0) {
+        try {
+          chrome.runtime.sendMessage({
+            type: "ATTENDANCE_DATA_INTERCEPTED",
+            payload: { records, sourceUrl: "sync-now" }
+          });
+        } catch(e) {}
+      }
+    });
 
     sendResponse({ success: true });
     return true;

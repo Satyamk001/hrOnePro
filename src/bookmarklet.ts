@@ -30,9 +30,10 @@ var records=null;
 var todayPunches=null;
 var profileDone=false;
 var attendanceDone=false;
+var punchDone=false;
 var hdrs={'Content-Type':'application/json','Accept':'application/json, text/plain, */*','domaincode':'mapmyindia','accessmode':'W','x-requested-with':location.origin,'cache-control':'no-cache','pragma':'no-cache'};
 function trySend(){
-if(!attendanceDone||!profileDone)return;
+if(!attendanceDone||!profileDone||!punchDone)return;
 if(!records||!records.length)return;
 var w=window.open(u,'attendance-insights');
 var i=0;
@@ -40,10 +41,12 @@ var s=function(){i++;try{w.postMessage({type:'ATTENDANCE_DATA',records:records,u
 setTimeout(s,1000);
 }
 setTimeout(function(){if(!profileDone){profileDone=true;console.log('[Attendance Insights] Profile fetch timed out');trySend()}},5000);
+setTimeout(function(){if(!punchDone){punchDone=true;console.log('[Attendance Insights] Punch fetch timed out');trySend()}},5000);
 fetch(location.origin+'/api/workforce/Employee/EmployeeInformation/'+eid,{method:'GET',headers:hdrs,credentials:'include'}).then(function(r){console.log('[Attendance Insights] Profile API status:',r.status);return r.ok?r.json():null}).then(function(data){if(data){var arr=Array.isArray(data)?data:[data];var info=arr[0];if(info){empProfile={employeeId:eid,employeeCode:info.employeeCode||'',employeeName:info.employeeName||userName||'',designation:info.designation||'',department:info.department||'',email:info.officialEmail||info.personalEmail||'',phone:info.mobileNo||'',dateOfJoining:info.dateOfJoining||'',reportingManager:info.reportingManager||'',profileImageUrl:info.imageVirtualPath||info.thumbnailFileName||null};console.log('[Attendance Insights] Profile parsed:',empProfile.employeeName)}}}).catch(function(e){console.log('[Attendance Insights] Profile fetch error:',e)}).then(function(){profileDone=true;trySend()});
-var today=new Date().toISOString().split('T')[0];
+var now=new Date();
+var today=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
 console.log('[Attendance Insights] Bookmarklet v'+BV+' running. eid='+eid+' punchDate='+today);
-fetch(location.origin+'/api/timeoffice/attendance/RawPunch/'+eid+'/'+today+'/true',{method:'GET',headers:hdrs,credentials:'include'}).then(function(r){console.log('[Attendance Insights] Punch API status:',r.status);return r.ok?r.json():null}).then(function(data){console.log('[Attendance Insights] Punch data:',data?data.length:'null');if(data&&data.length){todayPunches=data}}).catch(function(e){console.log('[Attendance Insights] Punch fetch error:',e)});
+fetch(location.origin+'/api/timeoffice/attendance/RawPunch/'+eid+'/'+today+'/true',{method:'GET',headers:hdrs,credentials:'include'}).then(function(r){console.log('[Attendance Insights] Punch API status:',r.status);return r.ok?r.json():null}).then(function(data){console.log('[Attendance Insights] Punch data:',data?data.length:'null');if(data&&data.length){todayPunches=data}}).catch(function(e){console.log('[Attendance Insights] Punch fetch error:',e)}).then(function(){punchDone=true;trySend()});
 fetch(location.origin+'/api/timeoffice/attendance/Calendar',{method:'POST',headers:hdrs,credentials:'include',body:JSON.stringify({attendanceYear:y,attendanceMonth:m,employeeId:eid,calendarViewType:'C'})}).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.text()}).then(function(text){if(!text)throw new Error('Empty response');var data=JSON.parse(text);records=Array.isArray(data)?data:(data.data||data.result||[]);if(!records.length){alert('No records found for '+m+'/'+y);return}attendanceDone=true;trySend()}).catch(function(e){alert('Error: '+e.message+'\\n\\nMake sure you are logged in to HROne.')});
 })())`.replace(/\n/g, '');
 }

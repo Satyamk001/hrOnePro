@@ -118,7 +118,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // If this data came from a tab we opened in the background for syncing,
     // close it now that we've captured the records.
     if (sender && sender.tab && sender.tab.id != null) {
-      closeSyncTab(sender.tab.id, "attendance data received");
+      setTimeout(() => {
+        closeSyncTab(sender.tab.id, "attendance data received");
+      }, 500);
     }
 
     sendResponse({ success: true, recordCount: records.length });
@@ -186,7 +188,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     // receiver.js is now injected declaratively on every http/https host (it
     // self-gates to the app page), so no programmatic injection is needed here.
 
-    chrome.storage.local.get(["lastInterceptedData", "lastInterceptedAt"], (result) => {
+    chrome.storage.local.get(["lastInterceptedData", "lastInterceptedAt", "lastTodayPunches", "lastTodayPunchesAt"], (result) => {
       if (result.lastInterceptedData) {
         const interceptedAt = new Date(result.lastInterceptedAt).getTime();
         const now = Date.now();
@@ -199,6 +201,12 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
               type: "ATTENDANCE_DATA_RECEIVED",
               payload: { records: result.lastInterceptedData },
             });
+            if (result.lastTodayPunches) {
+              chrome.tabs.sendMessage(tabId, {
+                type: "TODAY_PUNCHES_RECEIVED",
+                payload: { punches: result.lastTodayPunches },
+              });
+            }
           }, 500);
         }
       }
@@ -372,10 +380,6 @@ function fetchAttendanceFromHROne(eid, month, year) {
 
   function trySend() {
     if (!attendanceDone || !profileDone || !punchDone) return;
-    // Send results back to background via custom event → content.js
-    window.dispatchEvent(new CustomEvent("InterceptedAttendanceData", {
-      detail: { records: records || [], sourceUrl: "sync-now" }
-    }));
     if (empProfile) {
       window.dispatchEvent(new CustomEvent("InterceptedProfileData", {
         detail: { profile: empProfile }
@@ -386,6 +390,10 @@ function fetchAttendanceFromHROne(eid, month, year) {
         detail: { punches: todayPunches }
       }));
     }
+    // Send attendance records LAST so background tab is not closed before punches/profile are processed
+    window.dispatchEvent(new CustomEvent("InterceptedAttendanceData", {
+      detail: { records: records || [], sourceUrl: "sync-now" }
+    }));
   }
 
   // Fetch profile
@@ -434,7 +442,8 @@ function fetchAttendanceFromHROne(eid, month, year) {
   });
 
   // Fetch today's raw punches
-  const today = new Date().toISOString().split('T')[0];
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   fetch(location.origin + '/api/timeoffice/attendance/RawPunch/' + eid + '/' + today + '/true', {
     method: 'GET', headers: hdrs, credentials: 'include'
   }).then(r => r.ok ? r.json() : null).then(data => {

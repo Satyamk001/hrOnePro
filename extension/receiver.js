@@ -90,12 +90,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 // Also check chrome.storage.local on page load for any pending data
-chrome.storage.local.get(["lastInterceptedData", "lastInterceptedAt"], (result) => {
+chrome.storage.local.get(["lastInterceptedData", "lastInterceptedAt", "lastTodayPunches", "lastProfileData"], (result) => {
   if (result.lastInterceptedData) {
     const interceptedAt = new Date(result.lastInterceptedAt).getTime();
     const now = Date.now();
-    // Only auto-inject if data is from the last 5 minutes
-    if (now - interceptedAt < 5 * 60 * 1000) {
+    // Only auto-inject if data is from the last 10 minutes
+    if (now - interceptedAt < 10 * 60 * 1000) {
       console.log(
         "[Attendance Interceptor] receiver.js: found recent stored data (",
         result.lastInterceptedData.length,
@@ -108,6 +108,20 @@ chrome.storage.local.get(["lastInterceptedData", "lastInterceptedAt"], (result) 
             detail: { records: result.lastInterceptedData },
           })
         );
+        if (result.lastProfileData) {
+          window.dispatchEvent(
+            new CustomEvent("ProfileDataFromExtension", {
+              detail: { profile: result.lastProfileData },
+            })
+          );
+        }
+        if (result.lastTodayPunches) {
+          window.dispatchEvent(
+            new CustomEvent("TodayPunchesFromExtension", {
+              detail: { punches: result.lastTodayPunches },
+            })
+          );
+        }
       }, 1000);
     }
   }
