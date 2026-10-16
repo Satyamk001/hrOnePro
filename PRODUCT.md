@@ -8,7 +8,7 @@ Web SPA (desktop & mobile responsive), Chrome Extension (Manifest V3), and local
 
 ## Stack
 
-React 19, Vite 6, TypeScript, TailwindCSS 3, Framer Motion, Recharts. Static SPA with no backend — all computation runs client-side. Data persistence via browser `localStorage`. Data ingestion via Chrome Extension (Manifest V3, v2.7.0) and Bookmarklet (v6).
+React 19, Vite 6, TypeScript, TailwindCSS 3, Framer Motion. Static SPA with no backend — all computation runs client-side. Data persistence via browser `localStorage`. Data ingestion via Chrome Extension (Manifest V3, v2.7.0) and Bookmarklet (v6).
 
 ## Users
 

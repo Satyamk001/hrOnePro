@@ -19,7 +19,6 @@ Data flows into the client application without manual copy-pasting through three
 | **Build Tool & Bundler** | Vite 6 | Development server, code splitting, asset pipeline |
 | **Styling** | TailwindCSS 3 + CSS Variables | Mistral-inspired design tokens, glassmorphism, warm dark mode |
 | **Motion & UI Primitives** | Framer Motion + Lucide-style SVG | Glass toggles, splash buttons, click ripples, animated counters, blur reveals |
-| **Charting** | Recharts 2 | Attendance visualization and trend components |
 | **Testing** | Vitest 3 + fast-check + Testing Library | Unit tests, property-based tests, component tests |
 | **Persistence** | Browser `localStorage` + `storage` events | Multi-month record storage, settings, real-time cross-tab synchronization |
 | **Data Ingestion** | Chrome Extension (Manifest V3, v2.7.0) | Network interception (fetch + XHR monkey patching), headless background tab sync |
@@ -32,7 +31,7 @@ Data flows into the client application without manual copy-pasting through three
 
 The interface follows a warm, Mistral AI-inspired aesthetic with dark/light themes, glassmorphism navigation pills, and signature sunset gradients.
 
-### 1. Theme & Color Tokens (`src/index.css`)
+### 1. Theme & Color Tokens (`src/styles/theme.css`)
 
 CSS custom properties dynamically adapt between light and warm-dark mode:
 
@@ -41,18 +40,18 @@ CSS custom properties dynamically adapt between light and warm-dark mode:
 | `--color-canvas` | `#ffffff` | `#0f0e0c` | Base application background |
 | `--color-surface` | `#fafaf9` | `#171614` | Sidebar and subtle card surfaces |
 | `--color-cream` | `#fef9ec` | `#292218` | Hero cards, highlighted sections |
-| `--color-cream-deeper`| `#fbf2db` | `#382f22` | Badges, nested highlights |
+| `--color-cream-deeper`| `#fde68a` | `#44380e` | Badges, nested highlights |
 | `--color-primary` | `#f97316` | `#fb923c` | Active accents, CTAs, positive indicators |
 | `--color-ink` | `#1c1917` | `#fafaf9` | Headings, primary text |
 | `--color-charcoal` | `#44403c` | `#d6d3d1` | Body copy emphasis |
-| `--color-steel` | `#78716c` | `#78716c` | Metadata, subtitles, column headers |
+| `--color-steel` | `#6b6560` | `#9c958f` | Metadata, subtitles, column headers |
 | `--color-hairline` | `#e7e5e4` | `#2e2a26` | Subtle structural borders |
-| `--color-hairline-strong`| `#d6d3d1` | `#44403c` | Interactive element borders |
+| `--color-hairline-strong`| `#d6d3d1` | `#3d3730` | Interactive element borders |
 | `--color-beige-deep` | `#e5d5b0` | `#4a3f2a` | Cream container borders |
 | `--color-error` | `#dc2626` | `#f87171` | Deficit / shortfall values |
 | `--color-warning` | `#d97706` | `#fbbf24` | Late arrivals, alerts |
 
-### 2. Glassmorphism Three-Pill Header (`src/App.tsx`)
+### 2. Glassmorphism Three-Pill Header (`src/components/layout/TopBar.tsx`)
 
 A floating topbar composed of three frosted-glass pills:
 - **Left (`brand-pill`)**: Application title ("Attendance Insights") and employee name badge.
@@ -62,7 +61,7 @@ A floating topbar composed of three frosted-glass pills:
   - Theme switcher (`GlassToggle` with smooth transition orb).
   - One-click Sync button (`SplashButton` with interactive ripple, disabled when sync is running or extension unavailable).
 
-### 3. Sidebar Episode Selector (`src/App.tsx`)
+### 3. Sidebar Episode Selector (`src/components/layout/EpisodeSidebar.tsx` + `src/hooks/useSidebarCarousel.ts`)
 
 A vertical, scroll-centered month selector:
 - Centered on the active month with scale and opacity falloffs (3D cinematic feel).
@@ -79,13 +78,14 @@ A vertical, scroll-centered month selector:
   - "Can Leave At" calculation with live remaining time countdown or accumulated overtime.
   - Punch log chip timeline showing all raw punch events with terminal source codes (`BIO`, `WEB`) and live pulsing indicator for active check-ins.
 - **`Dashboard` (`src/components/Dashboard.tsx`)**:
-  - Hero card: Cumulative Net Balance (Overtime − Shortfall) with dynamic color styling (`text-primary` for surplus, `text-error` for deficit).
-  - Metrics Grid: Overtime, Shortfall, Total Working Hours, Raw HROne Hours, Average Daily Work Duration, Total Working Days, and Late Arrival count.
-  - Status breakdown pills: Present, Half Day, Leave, Holiday, Week Off, Flexi Leave, Earned Leave, Absent, Pending.
+  - Hero state card: Cumulative Net Balance with a Behind / Ahead / On track chip. For the current month it shows working days left and the min/day pace to break even; finished months get a Final verdict.
+  - Three metric groups: Month (days left / pending, week off, holiday, leave), Output (worked days, total hours vs HROne, average vs the standard shift), Discipline (late, half day, absent, missing).
+  - Longest / Shortest day cards jump to the matching row in the day table and briefly highlight it.
 - **`DayTable` (`src/components/DayTable.tsx`)**:
   - Full day-by-day table with sorting on all key columns (Date, Status, Time In, Time Out, Worked, +/− Shift, Late).
   - Toggle between "Worked Days Only" and "All Days".
   - Color-coded +/− shift differences and late arrival badges.
+  - Stable per-row ids let the month summary scroll to and highlight a specific day.
 - **Sunset Stripe Band**: Signature horizontal gradient stripe anchoring the base of the content area.
 
 ### 5. Profile Panel & Drawer (`src/components/ProfilePanel.tsx`)
@@ -286,6 +286,14 @@ Records are evaluated in strict priority order:
 
 ---
 
+## Module Layout
+
+- `src/App.tsx` is a composition root: hooks own state, `features/` owns domain logic, `components/layout/` owns app chrome. Sync orchestration (extension and bookmarklet listeners) still lives in `App.tsx` and speaks only through the frozen contract in `src/features/sync/protocol.ts` (extension v2.7.0 / bookmarklet v6).
+- `src/utils/config.ts` is the single source for storage keys, protocol versions, and sync timeouts; `npm run build` fails fast if `EXTENSION_VERSION` drifts from `extension/manifest.json`.
+- Styles are split by concern under `src/styles/`; `src/index.css` is only the ordered import manifest and that order is load-bearing.
+
+---
+
 ## Repository Structure
 
 ```
@@ -303,38 +311,68 @@ attendance-tracker/
 │   ├── favicon.svg               # Application icon
 │   └── vite.svg                  # Vite asset
 ├── scripts/
-│   └── zip-extension.mjs         # Dependency-free extension packaging script
+│   └── zip-extension.mjs         # Packages extension zip + version-drift guard vs config.ts
 ├── src/
-│   ├── __tests__/                # Integration test suites
+│   ├── __tests__/
+│   │   └── integration.test.tsx  # End-to-end flows: extension events, undo, bookmarklet
 │   ├── components/
+│   │   ├── layout/               # App chrome extracted from App.tsx
+│   │   │   ├── TopBar.tsx            # Three-pill glass header assembly
+│   │   │   ├── LiveClock.tsx         # Rolling-digit clock + live balance badge
+│   │   │   ├── EpisodeSidebar.tsx    # Month selector carousel (physics in useSidebarCarousel)
+│   │   │   ├── SyncNotices.tsx       # Freshness/status bar and sync notices
+│   │   │   ├── Onboarding.tsx        # Setup & help overlay
+│   │   │   ├── EmployeeIdDialog.tsx  # Employee ID prompt dialog
+│   │   │   └── Toast.tsx             # Confirmation toast
 │   │   ├── ui/                   # Reusable glassmorphism & motion components
 │   │   │   ├── AnimatedCounter.tsx  # Rolling digit counter animation
 │   │   │   ├── BlurReveal.tsx       # Text blur/fade reveal animation
 │   │   │   ├── ClickRipple.tsx      # Click ripple visual feedback
 │   │   │   ├── GlassToggle.tsx      # Frosted glass theme toggle switch
 │   │   │   ├── GlowCard.tsx         # Card with mouse-following hover glow
-│   │   │   ├── ShinyButton.tsx      # Shimmer button primitive
 │   │   │   └── SplashButton.tsx     # Animated sync button with splash feedback
-│   │   ├── Charts.tsx            # Attendance distribution charts
-│   │   ├── Dashboard.tsx         # Hero net balance & metric grid cards
-│   │   ├── DayTable.tsx          # Multi-column sortable table with worked-day filter
-│   │   ├── InputPanel.tsx        # Fallback manual input panel
+│   │   ├── AmbientBackground.tsx # Luminous-horizon ambient background layer
+│   │   ├── Dashboard.tsx         # Month summary: hero states, metric groups, day extremes
+│   │   ├── DayTable.tsx          # Sortable month table, worked-day filter, row highlight
 │   │   ├── PrivacyPage.tsx       # In-app Privacy & Data Safety documentation page
 │   │   ├── ProfilePanel.tsx      # Employee profile sidebar / drawer & last working day
 │   │   └── TodayCard.tsx         # Live intraday punches, departure target, punch log
+│   ├── features/
+│   │   ├── attendance/
+│   │   │   ├── helpers.ts            # Attendance domain helpers (month keys, date lookups)
+│   │   │   ├── useSavedEntries.ts    # Persisted records: upsert, undo, month rollover
+│   │   │   └── useAttendanceMetrics.ts # Classify, enrich, aggregate pipeline
+│   │   └── sync/
+│   │       └── protocol.ts       # Frozen extension v2.7.0 / bookmarklet v6 event contract
 │   ├── hooks/
-│   │   └── useNow.ts             # Live interval timer hook (updates on tick & window focus)
+│   │   ├── useNow.ts             # Live interval timer hook (updates on tick & window focus)
+│   │   ├── useLocalStorageState.ts # Generic persisted state with cross-tab sync
+│   │   ├── useTheme.ts           # Warm dark/light theme state
+│   │   ├── useToast.ts           # Toast queue
+│   │   ├── useSidebarCarousel.ts # Month selector scroll/scale physics
+│   │   └── useDropletMerge.ts    # Today-card to clock-pill morph animation state
+│   ├── styles/                   # Stylesheet split (import order = cascade order)
+│   │   ├── tailwind.css          # @tailwind directives (must stay first)
+│   │   ├── theme.css             # :root / .dark color tokens
+│   │   ├── base.css              # Element defaults, scrollbar, focus, notices
+│   │   ├── topbar.css            # Glass pills + topbar responsive rules
+│   │   ├── components.css        # Scroll masks, metric-cell, row highlight, sidebar bits
+│   │   ├── ambient.css           # Ambient background system + GlowCard
+│   │   └── droplet.css           # Droplet merge morph + reduced-motion overrides
+│   ├── test/
+│   │   └── setup.ts              # Vitest jsdom mocks (matchMedia, observers, scroll)
 │   ├── types/
-│   │   └── index.ts              # TypeScript interfaces (AttendanceRecord, RawPunch, TodayAttendance, etc.)
+│   │   └── index.ts              # TypeScript interfaces (AttendanceRecord, RawPunch, aggregates, etc.)
 │   ├── utils/
 │   │   ├── classifier.ts         # Day classification rules & status mapping
 │   │   ├── cn.ts                 # ClassName utility
+│   │   ├── config.ts             # Storage keys, protocol versions, sync timeouts (single source)
 │   │   ├── liveTime.ts           # Pure temporal utilities (local date, shift math, freshness)
-│   │   ├── parser.ts             # Raw data validation & normalization
+│   │   ├── storage.ts            # Safe localStorage read/write helpers
 │   │   └── timeCalculator.ts     # Time arithmetic, formatting, and metrics aggregation
-│   ├── App.tsx                   # Main application root, state manager, listeners
+│   ├── App.tsx                   # Composition root: sync orchestration + view assembly
 │   ├── bookmarklet.ts            # Bookmarklet v6 code generator
-│   ├── index.css                 # Tailwind directives, theme variables, glass styling
+│   ├── index.css                 # Entry manifest: imports src/styles/* in cascade order
 │   ├── main.tsx                  # React entry point
 │   └── vite-env.d.ts             # Vite global type definitions
 ├── PRODUCT.md                    # Product specification and principles
@@ -372,3 +410,5 @@ npm run preview
 # Run local CLI server
 npm start
 ```
+
+`npm run build` also fails fast if the extension version in `src/utils/config.ts` no longer matches `extension/manifest.json` (packaging guard).
