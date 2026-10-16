@@ -173,7 +173,7 @@ export default function ProfilePanel({ profile, yesterdayRecord, appVersion, ope
 
       </div>
 
-      <div className="p-5 pt-4 bg-canvas border-t border-hairline/50 shrink-0">
+      <div className="p-5 pt-4 border-t border-hairline/50 shrink-0">
         <div className="flex items-center justify-between">
           <button
             onClick={onOpenPrivacy}

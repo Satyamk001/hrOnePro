@@ -435,7 +435,7 @@ html.theme-transitioning *::after {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 5px 6px;
+  padding: 1px 6px;
   flex-shrink: 0;
   white-space: nowrap;
 }
@@ -676,7 +676,15 @@ html.theme-transitioning *::after {
     transform 160ms cubic-bezier(0.22, 1, 0.36, 1),
     box-shadow 160ms cubic-bezier(0.22, 1, 0.36, 1),
     border-color 160ms cubic-bezier(0.22, 1, 0.36, 1);
-  will-change: transform, box-shadow;
+}
+
+/* Momentary accent on a table row the summary just jumped to */
+.day-row-highlight > td {
+  background-color: color-mix(in srgb, var(--color-primary) 12%, transparent);
+}
+
+.day-row-highlight > td:first-child {
+  box-shadow: inset 3px 0 0 0 var(--color-primary);
 }
 
 @media (hover: hover) and (pointer: fine) {

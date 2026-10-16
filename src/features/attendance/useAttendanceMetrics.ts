@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import type {
-  DashboardMetrics,
+  AggregateMetrics,
   EnrichedRecord,
   SavedEntry,
   TodayAttendance,
@@ -9,7 +9,6 @@ import { classifyRecord } from "../../utils/classifier";
 import {
   computeAggregateMetrics,
   computeRecordMetrics,
-  formatMinutes,
 } from "../../utils/timeCalculator";
 import { DEFAULT_SHIFT_MINUTES, shiftLengthMinutes } from "../../utils/liveTime";
 import { findLastWorkingDayRecord } from "./helpers";
@@ -41,10 +40,9 @@ export function useAttendanceMetrics({
 
   const classifiedRecords = useMemo(() => attendanceData?.map(classifyRecord) ?? null, [attendanceData]);
   const enrichedRecords = useMemo(() => classifiedRecords?.map(computeRecordMetrics) ?? null, [classifiedRecords]);
-  const dashboardMetrics = useMemo<DashboardMetrics | null>(() => {
+  const dashboardMetrics = useMemo<AggregateMetrics | null>(() => {
     if (!classifiedRecords) return null;
-    const a = computeAggregateMetrics(classifiedRecords);
-    return { ...a, formattedTotalHours: formatMinutes(a.totalWorkingMinutes), formattedExtraHours: formatMinutes(a.totalExtraMinutes), formattedShortfall: formatMinutes(a.totalShortfallMinutes), formattedAverage: formatMinutes(a.averageWorkMinutes) };
+    return computeAggregateMetrics(classifiedRecords);
   }, [classifiedRecords]);
 
   const tableRecords = useMemo(() => {

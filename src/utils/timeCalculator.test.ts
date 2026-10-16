@@ -175,7 +175,13 @@ describe("computeAggregateMetrics", () => {
     const result = computeAggregateMetrics(records);
 
     // Both have 600 minutes worked; earliest date (2024-01-02) should be chosen
-    expect(result.longestDay).toEqual({ date: "2024-01-02", minutes: 600 });
+    expect(result.longestDay).toEqual({
+      date: "2024-01-02",
+      minutes: 600,
+      timeIn: "09:00",
+      timeout: "18:00",
+      extraDeficitMinutes: 60,
+    });
   });
 
   it("selects earliest date when shortest day is tied", () => {
@@ -197,7 +203,13 @@ describe("computeAggregateMetrics", () => {
     const result = computeAggregateMetrics(records);
 
     // Both have 420 minutes worked; earliest date (2024-01-03) should be chosen
-    expect(result.shortestDay).toEqual({ date: "2024-01-03", minutes: 420 });
+    expect(result.shortestDay).toEqual({
+      date: "2024-01-03",
+      minutes: 420,
+      timeIn: "09:00",
+      timeout: "18:00",
+      extraDeficitMinutes: -120,
+    });
   });
 
   it("computes correct aggregate metrics for known inputs", () => {
@@ -240,12 +252,48 @@ describe("computeAggregateMetrics", () => {
     expect(result.earliestTimeout).toBe("17:30");
     expect(result.latestTimeout).toBe("19:00");
     // Longest day: 2024-01-01 with 600 min
-    expect(result.longestDay).toEqual({ date: "2024-01-01", minutes: 600 });
+    expect(result.longestDay).toEqual({
+      date: "2024-01-01",
+      minutes: 600,
+      timeIn: "08:50",
+      timeout: "19:00",
+      extraDeficitMinutes: 60,
+    });
     // Shortest day: 2024-01-02 with 480 min
-    expect(result.shortestDay).toEqual({ date: "2024-01-02", minutes: 480 });
+    expect(result.shortestDay).toEqual({
+      date: "2024-01-02",
+      minutes: 480,
+      timeIn: "09:10",
+      timeout: "17:30",
+      extraDeficitMinutes: -60,
+    });
     // Late count: 1 (presentStatus "Late")
     expect(result.lateCount).toBe(1);
     // Late percentage: (1/2)*100 = 50.0
     expect(result.latePercentage).toBe(50.0);
+    // Standard shift: most common full shift (09:00-18:00 = 540 min)
+    expect(result.standardShiftMinutes).toBe(540);
+  });
+
+  it("uses the most common full-shift length as the standard shift", () => {
+    const records: ClassifiedRecord[] = [
+      makeRecord({ attendanceDate: "2024-01-01", shiftStartTime: "09:00", shiftEndTime: "18:00" }),
+      makeRecord({ attendanceDate: "2024-01-02", shiftStartTime: "09:00", shiftEndTime: "18:00" }),
+      makeRecord({ attendanceDate: "2024-01-03", shiftStartTime: "09:30", shiftEndTime: "19:00" }),
+    ];
+
+    const result = computeAggregateMetrics(records);
+
+    // Two days at 540 min beat one day at 570 min
+    expect(result.standardShiftMinutes).toBe(540);
+  });
+
+  it("falls back to the 9h default when no full shift is on record", () => {
+    // Half Day shifts are halved and must not define the benchmark
+    const records: ClassifiedRecord[] = [makeRecord({ status: "Half Day" })];
+
+    const result = computeAggregateMetrics(records);
+
+    expect(result.standardShiftMinutes).toBe(540);
   });
 });

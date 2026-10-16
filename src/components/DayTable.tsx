@@ -4,6 +4,8 @@ import { formatMinutes } from "../utils/timeCalculator";
 
 interface DayTableProps {
   records: EnrichedRecord[];
+  /** Date ("YYYY-MM-DD") of the row the summary just jumped to, if any. */
+  highlightDate?: string | null;
 }
 
 type SortState = {
@@ -47,10 +49,10 @@ function renderExtraDeficit(record: EnrichedRecord): React.ReactNode {
   const value = record.extraDeficitMinutes;
   if (value === 0) return <span className="text-steel">0h 0m</span>;
   if (value > 0) return <span className="text-primary font-medium">+{formatMinutes(value)}</span>;
-  return <span className="text-error font-medium">-{formatMinutes(Math.abs(value))}</span>;
+  return <span className="text-error font-medium">−{formatMinutes(Math.abs(value))}</span>;
 }
 
-export default function DayTable({ records }: DayTableProps) {
+export default function DayTable({ records, highlightDate }: DayTableProps) {
   const [sortState, setSortState] = useState<SortState>({ column: null, direction: "asc" });
 
   function handleColumnClick(columnKey: string) {
@@ -133,13 +135,14 @@ export default function DayTable({ records }: DayTableProps) {
             return (
               <tr
                 key={`${record.attendanceDate}-${idx}`}
+                id={`day-row-${record.attendanceDate}`}
                 className={`border-b last:border-b-0 border-hairline transition-colors ${
                   record.isLateArrival
                     ? "bg-[#fef9ec] dark:bg-[#2a2000]"
                     : record.extraDeficitMinutes < 0 && record.isWorkedDay
                     ? "bg-[#fef2f2] dark:bg-[#2a0000]"
                     : "hover:bg-hairline-soft"
-                }`}
+                } ${highlightDate === record.attendanceDate ? "day-row-highlight" : ""}`}
               >
                 <td className={`px-4 py-3 text-sm text-ink font-medium whitespace-nowrap ${isLastRow ? "rounded-bl-lg" : ""}`}>{record.attendanceDate}</td>
                 <td className="px-4 py-3 text-sm text-charcoal whitespace-nowrap">{getDayOfWeek(record.attendanceDate)}</td>

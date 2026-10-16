@@ -67,6 +67,19 @@ export interface RecordMetrics {
 }
 
 /**
+ * A representative worked day (longest / shortest) with everything the
+ * month summary shows about it.
+ */
+export interface DayExtreme {
+  date: string;
+  minutes: number;
+  timeIn: string | null;
+  timeout: string | null;
+  /** Worked minutes − shift duration for that day. */
+  extraDeficitMinutes: number;
+}
+
+/**
  * Aggregate metrics computed across all records
  */
 export interface AggregateMetrics {
@@ -79,6 +92,11 @@ export interface AggregateMetrics {
   totalExtraMinutes: number;
   totalShortfallMinutes: number;
   averageWorkMinutes: number;
+  /**
+   * Most common full-shift length across Present days — the benchmark the
+   * average is read against. Falls back to DEFAULT_SHIFT_MINUTES (9h).
+   */
+  standardShiftMinutes: number;
   workedDayCount: number;
   lateCount: number;
   latePercentage: number;
@@ -86,19 +104,9 @@ export interface AggregateMetrics {
   latestTimeIn: string | undefined;
   earliestTimeout: string | undefined;
   latestTimeout: string | undefined;
-  longestDay: { date: string; minutes: number } | undefined;
-  shortestDay: { date: string; minutes: number } | undefined;
+  longestDay: DayExtreme | undefined;
+  shortestDay: DayExtreme | undefined;
   lateByShiftCount: number;
-}
-
-/**
- * Dashboard display model — extends AggregateMetrics with formatted strings
- */
-export interface DashboardMetrics extends AggregateMetrics {
-  formattedTotalHours: string;
-  formattedExtraHours: string;
-  formattedShortfall: string;
-  formattedAverage: string;
 }
 
 /**

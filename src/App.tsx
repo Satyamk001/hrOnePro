@@ -98,6 +98,9 @@ function App() {
   const [undoEntry, setUndoEntry] = useState<{ entry: SavedEntry; message: string } | null>(null);
   const [empIdDialogOpen, setEmpIdDialogOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  // Which day row the summary just jumped to in the table (brief highlight).
+  const [highlightDate, setHighlightDate] = useState<string | null>(null);
+  const highlightTimerRef = useRef<number | undefined>(undefined);
   // Ticks every 30s (and on tab focus) so "Today", "Yesterday" and
   // "synced X ago" roll over without a reload.
   const now = useNow(30000);
@@ -373,6 +376,22 @@ function App() {
     todayShiftMinutes,
   } = useAttendanceMetrics({ entries: savedEntries, activeKey, today, todayAttendance, showAllDays });
 
+  // Jump from a summary card to the matching row in the month table.
+  const handleLocateDay = useCallback((date: string) => {
+    setHighlightDate(date);
+    window.clearTimeout(highlightTimerRef.current);
+    highlightTimerRef.current = window.setTimeout(() => setHighlightDate(null), 2600);
+    requestAnimationFrame(() => {
+      const row = document.getElementById(`day-row-${date}`);
+      if (!row) return;
+      const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
+      row.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "center" });
+    });
+  }, []);
+
+  // Clear the highlight timer if the app unmounts mid-highlight.
+  useEffect(() => () => window.clearTimeout(highlightTimerRef.current), []);
+
   const freshness = getFreshness(lastSynced, now);
   const syncedAgo = formatRelativeAge(lastSynced, now);
 
@@ -504,7 +523,13 @@ function App() {
                       sheenRef={dropletSheenRef}
                     />
                   )}
-                  {dashboardMetrics && <Dashboard metrics={dashboardMetrics} />}
+                  {dashboardMetrics && (
+                    <Dashboard
+                      metrics={dashboardMetrics}
+                      isCurrentMonth={activeKey === today.slice(0, 7)}
+                      onLocateDay={handleLocateDay}
+                    />
+                  )}
 
                   {tableRecords && (
                     <section>
@@ -520,7 +545,7 @@ function App() {
                         </button>
                       </div>
                       <div className="rounded-lg border border-hairline bg-canvas shadow-card">
-                        <DayTable records={tableRecords} />
+                        <DayTable records={tableRecords} highlightDate={highlightDate} />
                       </div>
                     </section>
                   )}

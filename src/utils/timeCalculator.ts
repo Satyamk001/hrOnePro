@@ -4,6 +4,7 @@ import type {
   AggregateMetrics,
   DayStatus,
 } from "../types";
+import { DEFAULT_SHIFT_MINUTES } from "./liveTime";
 
 /**
  * Convert "HH:MM" string to total minutes. Returns 0 for null/undefined/invalid input.
@@ -171,7 +172,7 @@ export function computeAggregateMetrics(
       : undefined;
 
   // Longest day: max workedMinutes among worked days; earliest date on tie
-  let longestDay: { date: string; minutes: number } | undefined = undefined;
+  let longestDay: AggregateMetrics["longestDay"] = undefined;
   if (workedDays.length > 0) {
     longestDay = workedDays.reduce(
       (best, r) => {
@@ -179,16 +180,16 @@ export function computeAggregateMetrics(
           r.workedMinutes > best.minutes ||
           (r.workedMinutes === best.minutes && r.attendanceDate < best.date)
         ) {
-          return { date: r.attendanceDate, minutes: r.workedMinutes };
+          return { date: r.attendanceDate, minutes: r.workedMinutes, timeIn: r.timeIn, timeout: r.timeout, extraDeficitMinutes: r.extraDeficitMinutes };
         }
         return best;
       },
-      { date: workedDays[0].attendanceDate, minutes: workedDays[0].workedMinutes }
+      { date: workedDays[0].attendanceDate, minutes: workedDays[0].workedMinutes, timeIn: workedDays[0].timeIn, timeout: workedDays[0].timeout, extraDeficitMinutes: workedDays[0].extraDeficitMinutes }
     );
   }
 
   // Shortest day: min workedMinutes among worked days; earliest date on tie
-  let shortestDay: { date: string; minutes: number } | undefined = undefined;
+  let shortestDay: AggregateMetrics["shortestDay"] = undefined;
   if (workedDays.length > 0) {
     shortestDay = workedDays.reduce(
       (best, r) => {
@@ -196,12 +197,30 @@ export function computeAggregateMetrics(
           r.workedMinutes < best.minutes ||
           (r.workedMinutes === best.minutes && r.attendanceDate < best.date)
         ) {
-          return { date: r.attendanceDate, minutes: r.workedMinutes };
+          return { date: r.attendanceDate, minutes: r.workedMinutes, timeIn: r.timeIn, timeout: r.timeout, extraDeficitMinutes: r.extraDeficitMinutes };
         }
         return best;
       },
-      { date: workedDays[0].attendanceDate, minutes: workedDays[0].workedMinutes }
+      { date: workedDays[0].attendanceDate, minutes: workedDays[0].workedMinutes, timeIn: workedDays[0].timeIn, timeout: workedDays[0].timeout, extraDeficitMinutes: workedDays[0].extraDeficitMinutes }
     );
+  }
+
+  // Standard shift: the most common full-shift length across Present days
+  // (Half Day shifts are halved, so they would distort the benchmark).
+  // Falls back to the 9h GEN default when no full shifts are on record.
+  const shiftFrequency = new Map<number, number>();
+  for (const day of workedDays) {
+    if (day.status === "Present" && day.shiftDurationMinutes > 0) {
+      shiftFrequency.set(day.shiftDurationMinutes, (shiftFrequency.get(day.shiftDurationMinutes) ?? 0) + 1);
+    }
+  }
+  let standardShiftMinutes = DEFAULT_SHIFT_MINUTES;
+  let mostCommonShiftCount = 0;
+  for (const [minutes, count] of shiftFrequency) {
+    if (count > mostCommonShiftCount) {
+      standardShiftMinutes = minutes;
+      mostCommonShiftCount = count;
+    }
   }
 
   return {
@@ -216,6 +235,7 @@ export function computeAggregateMetrics(
     totalExtraMinutes,
     totalShortfallMinutes,
     averageWorkMinutes,
+    standardShiftMinutes,
     workedDayCount,
     lateCount,
     latePercentage,
