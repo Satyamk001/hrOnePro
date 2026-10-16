@@ -13,15 +13,6 @@ export default defineConfig({
   server: {
     allowedHosts: true,
   },
-  build: {
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          recharts: ['recharts'],
-        },
-      },
-    },
-  },
   test: {
     globals: true,
     environment: 'jsdom',
